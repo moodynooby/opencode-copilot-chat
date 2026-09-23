@@ -1,7 +1,7 @@
 {
   "name": "opencode-copilot-chat",
-  "displayName": "OpenCode for Copilot Chat: V2 Zen + Go",
-  "description": "Use OpenCode V2 Zen and Go models in GitHub Copilot Chat with live model discovery, native tool calling, optional anonymous Zen access, and Console BYOK.",
+  "displayName": "OpenCode for Copilot Chat: Zen + Go",
+  "description": "Use OpenCode Zen and Go models in GitHub Copilot Chat with live model discovery, native tool calling, optional anonymous Zen access, and Console BYOK.",
   "version": "0.7.6",
   "publisher": "moodynooby",
   "author": {
@@ -215,7 +215,7 @@
         "opencodezen.apiBaseUrl": {
           "type": "string",
           "default": "https://opencode.ai/inference",
-          "description": "Base URL for the OpenCode Zen V2 inference API. The extension derives the model catalog, OpenAI, Anthropic, and Google routes from this value. Requires a window reload after changing."
+          "description": "Experimental V2 base URL for OpenCode Zen. The default runtime uses the official OpenCode-compatible /zen/v1 gateway; this setting is only read when ZEN_TRANSPORT_MODE is changed to v2 in src/config.ts. Requires a window reload after changing."
         },
         "opencodego.maxTokens": {
           "type": "number",

@@ -86,10 +86,37 @@ describe("x-opencode-session header on auxiliary gateway requests", () => {
     assert.equal(capture[0].url, "https://opencode.ai/inference/v1/models");
     assert.equal(capture[0].headers.authorization, "Bearer sk-test");
     const session = capture[0].headers["x-opencode-session"];
-    assert.ok(
-      session && session.startsWith("vscode-aux-"),
-      `expected auxiliary session header, got: ${JSON.stringify(capture[0].headers)}`,
+    assert.ok(session && session.startsWith("ses_"), `expected auxiliary session header, got: ${JSON.stringify(capture[0].headers)}`);
+  });
+
+  it("uses the OpenCode public sentinel for a keyless legacy Zen catalog", async () => {
+    const { ModelListFetcher } = await import("../provider/modelList.js");
+    const capture: CapturedRequest[] = [];
+    stubFetch(
+      capture,
+      () =>
+        new Response(JSON.stringify({ data: [{ id: "space-bunny-free" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
     );
+
+    const fetcher = new ModelListFetcher({
+      context: fakeContext() as never,
+      definition: {
+        vendor: "opencodezen",
+        displayName: "OpenCode Zen",
+        modelsUrl: "https://opencode.ai/zen/v1/models",
+        zenTransportMode: "legacy",
+        fallbackModels: [],
+      } as never,
+      log: () => {},
+      replaceLiveModelMetadata: () => {},
+      filterAvailableModels: (ids: string[]) => Promise.resolve(ids),
+    });
+
+    assert.deepEqual(await fetcher.fetch(), ["space-bunny-free"]);
+    assert.equal(capture[0].headers.authorization, "Bearer public");
   });
 
   it("ModelListFetcher scopes cached catalogs by credential", async () => {
@@ -179,7 +206,7 @@ describe("x-opencode-session header on auxiliary gateway requests", () => {
     const context = fakeContext();
     const first = auxiliarySessionId(context as never);
     const second = auxiliarySessionId(context as never);
-    assert.ok(first.startsWith("vscode-aux-"));
+    assert.ok(first.startsWith("ses_"));
     assert.equal(first, second, "session id must be stable for the same installation state");
     assert.equal(context.globalState.get("opencode.auxSessionId"), first, "session id must be persisted to globalState");
     // A different installation (empty state) gets its own id.

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { OPEN_CODE_CLIENT, TEST_CONNECTION_TIMEOUT_MS, secretKeyFor } from "../config";
+import { buildOpenCodeGatewayAuthHeaders } from "../openCodeAuth";
 import { getUserAgent } from "./definitions";
 import { getErrorMessage } from "../utils";
 import { auxiliarySessionId } from "../request/headers";
@@ -80,6 +81,7 @@ export async function testConnection(deps: DialogDeps): Promise<void> {
   deps.log(`Testing connection to ${deps.definition.chatCompletionsUrl}`);
 
   try {
+    const sessionId = auxiliarySessionId(deps.context);
     const response = await fetch(deps.definition.chatCompletionsUrl, {
       method: "POST",
       headers: {
@@ -87,14 +89,16 @@ export async function testConnection(deps: DialogDeps): Promise<void> {
         "User-Agent": getUserAgent(),
         "x-opencode-client": OPEN_CODE_CLIENT,
         // Gateway enforcement (docs/go): auxiliary requests need a session id.
-        "x-opencode-session": auxiliarySessionId(deps.context),
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        "x-opencode-session": sessionId,
+        "x-session-affinity": sessionId,
+        "x-session-id": sessionId,
+        ...buildOpenCodeGatewayAuthHeaders("chat-completions", apiKey, deps.baseVendor, deps.definition.zenTransportMode),
       },
       body: JSON.stringify({
         model: deps.definition.testModelId,
         messages: [{ role: "user", content: "reply with just: ok" }],
         max_tokens: 10,
-        stream: false,
+        stream: true,
       }),
       signal: AbortSignal.timeout(TEST_CONNECTION_TIMEOUT_MS),
     });

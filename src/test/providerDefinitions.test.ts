@@ -30,11 +30,22 @@ before(async () => {
   isAnonymousZenModel = definitions.isAnonymousZenModel;
 });
 
-describe("OpenCode V2 provider definitions", () => {
-  it("derives all Zen V2 routes from one inference base URL", () => {
-    const providers = createProviderDefinitions("https://gateway.example.test/inference");
-    const zen = providers.opencodezen;
+describe("OpenCode Zen provider definitions", () => {
+  it("uses the official OpenCode-compatible gateway by default", () => {
+    const zen = createProviderDefinitions().opencodezen;
 
+    assert.equal(zen.zenTransportMode, "legacy");
+    assert.equal(zen.modelsUrl, "https://opencode.ai/zen/v1/models");
+    assert.equal(zen.chatCompletionsUrl, "https://opencode.ai/zen/v1/chat/completions");
+    assert.equal(zen.responsesUrl, "https://opencode.ai/zen/v1/responses");
+    assert.equal(zen.messagesUrl, "https://opencode.ai/zen/v1/messages");
+    assert.equal(zen.googleModelsUrl, "https://opencode.ai/zen/v1/models");
+  });
+
+  it("keeps the V2 routes available as a source-selected experimental mode", () => {
+    const zen = createProviderDefinitions("https://gateway.example.test/inference", "v2").opencodezen;
+
+    assert.equal(zen.zenTransportMode, "v2");
     assert.equal(zen.modelsUrl, "https://gateway.example.test/inference/v1/models");
     assert.equal(zen.chatCompletionsUrl, "https://gateway.example.test/inference/openai/v1/chat/completions");
     assert.equal(zen.responsesUrl, "https://gateway.example.test/inference/openai/v1/responses");
@@ -42,15 +53,25 @@ describe("OpenCode V2 provider definitions", () => {
     assert.equal(zen.googleModelsUrl, "https://gateway.example.test/inference/google/v1beta/models");
   });
 
-  it("allows the verified anonymous free model but withholds paid models", () => {
+  it("keeps anonymous discovery conservative in legacy mode", () => {
     const zen = createProviderDefinitions().opencodezen;
     const filterModel = zen.filterModel;
     assert.ok(filterModel);
 
     assert.equal(filterModel("space-bunny-free", undefined), true);
     assert.equal(filterModel("big-pickle", undefined), false);
-    assert.equal(filterModel("muse-spark-1.3-contributor-free", "service-account-key"), true);
+    assert.equal(filterModel("muse-spark-1.3-contributor-free", undefined), false);
     assert.equal(filterModel("gpt-5.5", undefined), false);
+  });
+
+  it("retains the narrow anonymous allowlist in experimental V2 mode", () => {
+    const zen = createProviderDefinitions("https://gateway.example.test/inference", "v2").opencodezen;
+    const filterModel = zen.filterModel;
+    assert.ok(filterModel);
+
+    assert.equal(filterModel("space-bunny-free", undefined), true);
+    assert.equal(filterModel("big-pickle", undefined), false);
+    assert.equal(filterModel("muse-spark-1.3-contributor-free", "service-account-key"), true);
   });
 
   it("excludes catalog-only System One and test models", () => {
@@ -59,10 +80,12 @@ describe("OpenCode V2 provider definitions", () => {
     assert.equal(isSupportedZenModel("test-novita-dsf4.1"), false);
   });
 
-  it("only treats verified anonymous Chat Completions models as keyless", () => {
-    assert.equal(isAnonymousZenModel("space-bunny-free"), true);
-    assert.equal(isAnonymousZenModel("big-pickle"), false);
-    assert.equal(isAnonymousZenModel("muse-spark-1.3-contributor-free"), false);
-    assert.equal(isAnonymousZenModel("gpt-5.5"), false);
+  it("uses the verified anonymous allowlist for both source transports", () => {
+    assert.equal(isAnonymousZenModel("big-pickle", "legacy"), false);
+    assert.equal(isAnonymousZenModel("big-pickle", "v2"), false);
+    assert.equal(isAnonymousZenModel("space-bunny-free", "legacy"), true);
+    assert.equal(isAnonymousZenModel("space-bunny-free", "v2"), true);
+    assert.equal(isAnonymousZenModel("muse-spark-1.3-contributor-free", "legacy"), false);
+    assert.equal(isAnonymousZenModel("gpt-5.5", "legacy"), false);
   });
 });

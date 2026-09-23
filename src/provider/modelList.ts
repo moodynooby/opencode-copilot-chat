@@ -10,6 +10,7 @@ import {
 } from "../config";
 import { getErrorMessage, sleep } from "../utils";
 import { getUserAgent, isTransientFetchError, type ModelListEntry, type ModelListResponse, type ProviderDefinition } from "./definitions";
+import { buildOpenCodeGatewayAuthHeaders } from "../openCodeAuth";
 import { auxiliarySessionId } from "../request/headers";
 import { resolveBaseVendor } from "../providerTypes";
 
@@ -47,15 +48,21 @@ export class ModelListFetcher {
       return this.deps.filterAvailableModels(cachedFresh.ids, undefined, credential);
     }
 
+    const sessionId = auxiliarySessionId(this.deps.context);
     const headers: Record<string, string> = {
       "User-Agent": getUserAgent(),
       Accept: "application/json",
       "x-opencode-client": OPEN_CODE_CLIENT,
-      "x-opencode-session": auxiliarySessionId(this.deps.context),
+      "x-opencode-session": sessionId,
+      "x-session-affinity": sessionId,
+      "x-session-id": sessionId,
+      ...buildOpenCodeGatewayAuthHeaders(
+        "chat-completions",
+        credential,
+        resolveBaseVendor(this.deps.definition.vendor),
+        this.deps.definition.zenTransportMode,
+      ),
     };
-    if (credential) {
-      headers.Authorization = `Bearer ${credential}`;
-    }
 
     let lastError: unknown;
     for (let attempt = 0; attempt <= MODEL_LIST_FETCH_MAX_RETRIES; attempt++) {

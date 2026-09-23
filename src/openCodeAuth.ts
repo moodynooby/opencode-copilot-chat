@@ -1,3 +1,4 @@
+import { ZEN_TRANSPORT_MODE, type ZenTransportMode } from "./config";
 import { ZEN_VENDOR, type ProviderVendor } from "./providerTypes";
 
 export type OpenCodeEndpointKind = "chat-completions" | "messages" | "responses" | "google";
@@ -5,18 +6,23 @@ export type OpenCodeEndpointKind = "chat-completions" | "messages" | "responses"
 /**
  * Build authentication headers for a provider-specific OpenCode endpoint.
  *
- * OpenCode Zen V2 is a single Console inference gateway and accepts the
- * service-account key as a Bearer token for every API family. Go retains its
- * native per-family headers. Anonymous Zen requests intentionally return no
- * auth headers rather than sending `Bearer undefined`.
+ * The official OpenCode-compatible legacy Zen gateway uses the literal
+ * `public` bearer sentinel when no credential is configured. The experimental
+ * V2 Console gateway does not accept that sentinel; it must remain keyless
+ * (or receive a real service-account key). Go retains its native per-family
+ * headers.
  */
 export function buildOpenCodeGatewayAuthHeaders(
   endpointKind: OpenCodeEndpointKind,
   apiKey: string | undefined,
   vendor: ProviderVendor,
+  zenTransportMode: ZenTransportMode = ZEN_TRANSPORT_MODE,
 ): Record<string, string> {
   const key = apiKey?.trim();
-  if (!key) {
+  if (!key || (vendor === ZEN_VENDOR && zenTransportMode === "v2" && key.toLowerCase() === "public")) {
+    if (vendor === ZEN_VENDOR && zenTransportMode === "legacy") {
+      return { Authorization: "Bearer public" };
+    }
     return {};
   }
 

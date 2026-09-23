@@ -61,7 +61,7 @@
 1. **Install or update [VS Code](https://code.visualstudio.com/)** to version 1.125 or newer. OpenCode BYOK chat works without a GitHub sign-in or Copilot plan.
 2. **Install this extension** from the VS Code Marketplace (or press `F5` in this repo for dev mode).
 3. **Choose access:**
-   - **Free Zen models:** No API key is required. The extension discovers the current catalog dynamically from the OpenCode V2 inference API.
+   - **Free Zen models:** No API key is required for the verified anonymous model. The extension discovers the current catalog dynamically from the official OpenCode-compatible Zen gateway.
    - **Paid Zen models (optional):** Create a service-account key in the [OpenCode Console](https://opencode.ai/console). Add credits to use Claude, GPT, Gemini, and other paid models.
    - **OpenCode Go (optional):** Subscribe to **OpenCode Go** ($10/mo, $5 first month promo) for curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro.
 4. **Open Copilot Chat** (Cmd/Ctrl+Shift+I, or click the Copilot icon).
@@ -96,10 +96,10 @@ _Selecting an OpenCode model from the Copilot Chat model picker._
 
 The extension refreshes **live model lists** periodically and on demand from:
 
-| Provider         | Endpoint                                  | Cost                                                                         |
-| ---------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
-| **OpenCode Go**  | `https://opencode.ai/zen/go/v1/models`    | $10/mo ($5 first month promo); usage limits: 5h/$12, weekly/$30, monthly/$60 |
-| **OpenCode Zen** | `https://opencode.ai/inference/v1/models` | live rotating free models + pay-as-you-go premium models                     |
+| Provider         | Endpoint                               | Cost                                                                         |
+| ---------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| **OpenCode Go**  | `https://opencode.ai/zen/go/v1/models` | $10/mo ($5 first month promo); usage limits: 5h/$12, weekly/$30, monthly/$60 |
+| **OpenCode Zen** | `https://opencode.ai/zen/v1/models`    | live rotating free models + pay-as-you-go premium models                     |
 
 ### ⭐ OpenCode Go ($10/mo subscription, $5 first month promo)
 
@@ -131,9 +131,11 @@ Curated open coding models, refreshed live from the endpoint. Deprecated/legacy 
 
 ### 🆓 OpenCode Zen free models (live catalog)
 
-OpenCode Zen exposes a rotating set of free conversational models through the V2 inference catalog. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. `space-bunny-free` is currently verified for anonymous Chat Completions access. Other free catalog entries such as `big-pickle`, MiMo, Ling, and Nemotron variants require a Console service-account key under the current free-tier policy, as do free models routed through Responses, Google, or Anthropic.
+OpenCode Zen exposes a rotating set of free conversational models through the official OpenCode-compatible gateway. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. `space-bunny-free` is currently verified for anonymous Chat Completions access. Other free catalog entries such as `big-pickle`, MiMo, Ling, and Nemotron variants require a Console service-account key under the current free-tier policy, as do free models routed through Responses, Google, or Anthropic.
 
 > Free models can change without notice and may have stricter anonymous rate limits. Configure a Console service-account key when you need paid models, other free models, or workspace-aware access.
+
+The default transport follows the current OpenCode client and uses the official `/zen/v1` gateway with its public-mode sentinel. The V2 Console transport is retained as an experimental, source-only path: change `ZEN_TRANSPORT_MODE` in `src/config.ts` from `"legacy"` to `"v2"` to test it. There is no automatic fallback between transports.
 
 ### 💰 OpenCode Zen paid models (requires balance)
 
@@ -188,11 +190,11 @@ Deprecated/unavailable models are filtered before registration. Per-provider lim
 | Zen GPT (`gpt-*`)                                     | `/responses`                     | OpenAI native        |
 | Zen Gemini (`gemini-*`)                               | `:streamGenerateContent?alt=sse` | Google native        |
 | Zen Claude (`claude-*`) + Go MiniMax (`minimax-m2.*`) | `/messages`                      | Anthropic-compatible |
-| Zen Qwen (`qwen3.*`)                                  | `/messages`                      | Console V2 routing   |
+| Zen Qwen (`qwen3.*`)                                  | `/messages`                      | Anthropic-compatible |
 | Go Qwen 3.5/3.6 Plus and Qwen 3.7 Max                 | `/messages`                      | Anthropic-compatible |
 | All other models                                      | `/chat/completions`              | OpenAI-compatible    |
 
-Qwen routing is vendor-specific: Zen uses the V2 Console Messages route, while OpenCode Go retains its existing Messages exceptions and sends the remaining Qwen models through Chat Completions.
+Qwen routing is vendor-specific: Zen uses the OpenCode-compatible Messages route, while OpenCode Go retains its existing Messages exceptions and sends the remaining Qwen models through Chat Completions.
 
 </details>
 
@@ -377,32 +379,32 @@ Provider diagnostics also include the VS Code/extension versions, extension host
 
 ## 🔧 Settings
 
-| Setting                                   | Default                         | Description                                                                                                            |
-| ----------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `opencodego.apiBaseUrl`                   | `https://opencode.ai/zen/go/v1` | Base URL for a Go-compatible gateway; the extension appends the required API routes. Reload after changing.            |
-| `opencodezen.apiBaseUrl`                  | `https://opencode.ai/inference` | Base URL for the OpenCode Zen V2 inference API; catalog and family routes are derived from it. Reload after changing.  |
-| `opencodego.temperature`                  | `0.2`                           | Sampling temperature (`0`–`2`)                                                                                         |
-| `opencodego.maxTokens`                    | `0`                             | Max output token override (`0` = per-model max)                                                                        |
-| `opencodego.maxInputTokens`               | `0`                             | Context window override (`0` = per-model default)                                                                      |
-| `opencodego.debugReasoning`               | `false`                         | Log `reasoning_content` to Output panel                                                                                |
-| `opencodego.requestTimeoutSeconds`        | `600`                           | Total request timeout                                                                                                  |
-| `opencodego.streamIdleTimeoutSeconds`     | `120`                           | Cancel if stream goes idle                                                                                             |
-| `opencodego.showUsageStatusBar`           | `true`                          | Show usage summary in status bar                                                                                       |
-| `opencodego.showProviderPrefix`           | `true`                          | Include `OpenCode Go` / `OpenCode Zen` in model names                                                                  |
-| `opencodego.visionProxyWholeConversation` | `false`                         | Vision proxy: describe the whole conversation instead of only the message with a new image (more context, more tokens) |
-| `opencodego.freeOnly`                     | `true`                          | Zen: free models only. `false` = include paid                                                                          |
-| `opencodego.enabled`                      | `true`                          | Register the OpenCode Go provider. `false` removes it from Language Models & every picker (keys kept)                  |
-| `opencodezen.enabled`                     | `true`                          | Register the OpenCode Zen provider. `false` removes it from Language Models & every picker (keys kept)                 |
-| `opencodego.agentsWindow`                 | `true`                          | Expose agent-host model variants (`targetChatSessionType`) for the Agents window                                       |
-| `opencodego.showAgentModelsInManagePanel` | `false`                         | Show agent vendors in Manage Language Models panel                                                                     |
-| `opencodego.stripThinkTags`               | `"auto"`                        | Strip `<think>` tags (`never`/`auto`/`always`)                                                                         |
-| `opencodego.thinking.deepseek`            | `"off"`                         | `off`/`low`/`medium`/`high`/`max`                                                                                      |
-| `opencodego.thinking.glm`                 | `"off"`                         | `off`/`high`/`max`                                                                                                     |
-| `opencodego.thinking.kimi`                | `"off"`                         | `on`/`off`                                                                                                             |
-| `opencodego.thinking.minimax`             | `"off"`                         | `off`/`on`                                                                                                             |
-| `opencodego.thinking.mimo`                | `"off"`                         | `off`/`low`/`medium`/`high`                                                                                            |
-| `opencodego.thinking.qwen`                | `"off"`                         | `auto`/`on`/`off`                                                                                                      |
-| `opencodego.thinking.qwenBudget`          | `"auto"`                        | `auto`/`4096`/`16384`/`32768`/`81920`                                                                                  |
+| Setting                                   | Default                         | Description                                                                                                                      |
+| ----------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `opencodego.apiBaseUrl`                   | `https://opencode.ai/zen/go/v1` | Base URL for a Go-compatible gateway; the extension appends the required API routes. Reload after changing.                      |
+| `opencodezen.apiBaseUrl`                  | `https://opencode.ai/inference` | Experimental V2 base URL, read only when `ZEN_TRANSPORT_MODE` is changed to `v2` in `src/config.ts`; the default uses `/zen/v1`. |
+| `opencodego.temperature`                  | `0.2`                           | Sampling temperature (`0`–`2`)                                                                                                   |
+| `opencodego.maxTokens`                    | `0`                             | Max output token override (`0` = per-model max)                                                                                  |
+| `opencodego.maxInputTokens`               | `0`                             | Context window override (`0` = per-model default)                                                                                |
+| `opencodego.debugReasoning`               | `false`                         | Log `reasoning_content` to Output panel                                                                                          |
+| `opencodego.requestTimeoutSeconds`        | `600`                           | Total request timeout                                                                                                            |
+| `opencodego.streamIdleTimeoutSeconds`     | `120`                           | Cancel if stream goes idle                                                                                                       |
+| `opencodego.showUsageStatusBar`           | `true`                          | Show usage summary in status bar                                                                                                 |
+| `opencodego.showProviderPrefix`           | `true`                          | Include `OpenCode Go` / `OpenCode Zen` in model names                                                                            |
+| `opencodego.visionProxyWholeConversation` | `false`                         | Vision proxy: describe the whole conversation instead of only the message with a new image (more context, more tokens)           |
+| `opencodego.freeOnly`                     | `true`                          | Zen: free models only. `false` = include paid                                                                                    |
+| `opencodego.enabled`                      | `true`                          | Register the OpenCode Go provider. `false` removes it from Language Models & every picker (keys kept)                            |
+| `opencodezen.enabled`                     | `true`                          | Register the OpenCode Zen provider. `false` removes it from Language Models & every picker (keys kept)                           |
+| `opencodego.agentsWindow`                 | `true`                          | Expose agent-host model variants (`targetChatSessionType`) for the Agents window                                                 |
+| `opencodego.showAgentModelsInManagePanel` | `false`                         | Show agent vendors in Manage Language Models panel                                                                               |
+| `opencodego.stripThinkTags`               | `"auto"`                        | Strip `<think>` tags (`never`/`auto`/`always`)                                                                                   |
+| `opencodego.thinking.deepseek`            | `"off"`                         | `off`/`low`/`medium`/`high`/`max`                                                                                                |
+| `opencodego.thinking.glm`                 | `"off"`                         | `off`/`high`/`max`                                                                                                               |
+| `opencodego.thinking.kimi`                | `"off"`                         | `on`/`off`                                                                                                                       |
+| `opencodego.thinking.minimax`             | `"off"`                         | `off`/`on`                                                                                                                       |
+| `opencodego.thinking.mimo`                | `"off"`                         | `off`/`low`/`medium`/`high`                                                                                                      |
+| `opencodego.thinking.qwen`                | `"off"`                         | `auto`/`on`/`off`                                                                                                                |
+| `opencodego.thinking.qwenBudget`          | `"auto"`                        | `auto`/`4096`/`16384`/`32768`/`81920`                                                                                            |
 
 <details>
 <summary><b>📜 Full settings reference with descriptions</b></summary>
@@ -453,7 +455,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Is it really free? What's the catch?</b></summary>
 
-**OpenCode Zen** offers a dynamic set of rotating free conversational models. `space-bunny-free` is currently verified for anonymous Chat Completions access; other free models and all paid Zen models require a Console service-account key (paid models also require credits). Anonymous access can be rate-limited.
+**OpenCode Zen** offers a dynamic set of rotating free conversational models. `space-bunny-free` is currently verified for anonymous Chat Completions access; other free models and all paid Zen models require a Console service-account key (paid models also require credits). Anonymous access can be rate-limited and the upstream free-tier policy may change.
 
 **OpenCode Go** is a **subscription**: **$10/mo** ($5 first month promo) with generous usage limits (5h/$12, weekly/$30, monthly/$60). It unlocks curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro. When you hit the limit, you can continue using the free Zen models.
 

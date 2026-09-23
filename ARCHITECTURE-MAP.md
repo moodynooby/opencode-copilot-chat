@@ -234,7 +234,7 @@ flowchart TD
 | Claude                 | `/^claude-/i`                                             | `messages`         | `null`         | any                                        |
 | MiniMax m2.x           | `/^minimax-m2\./i`                                        | `messages`         | `minimax`      | `opencodego` only (Zen → chat-completions) |
 | Qwen Messages (legacy) | `/^qwen3\.(?:5\|6)-plus(?:-free)?$/` · `/^qwen3\.7-max$/` | `messages`         | `qwen`         | any                                        |
-| Qwen Messages (V2)     | `/^qwen3\./i`                                             | `messages`         | `qwen`         | `opencodezen` only                         |
+| Qwen Messages (Zen)    | `/^qwen3\./i`                                             | `messages`         | `qwen`         | `opencodezen` only                         |
 | Gemini                 | `/^gemini-/i`                                             | `google`           | `null`         | `opencodezen` only                         |
 | MiniMax                | `/^minimax-/i`                                            | `chat-completions` | `minimax`      | any                                        |
 | DeepSeek               | `/^deepseek-/i`                                           | `chat-completions` | `deepseek`     | any                                        |
@@ -272,9 +272,9 @@ flowchart LR
 
 ### 5.2 Model Discovery (`provideLanguageModelChatInformation`)
 
-1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback. A missing Zen key is valid for the verified anonymous model set.
+1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback. A missing Zen key uses the official legacy `public` sentinel only for the verified anonymous model set; other models require a key.
 2. Persist key to SecretStorage (non-agent variants) so agent variants inherit it.
-3. `fetchModels()` — live GET `modelsUrl` with retry/backoff/timeout (Zen V2 uses `/inference/v1/models`; Go remains `/zen/go/v1/models`) → `filterAvailableModels()` (drops unsupported catalog entries, `KNOWN_UNAVAILABLE_MODEL_IDS`, deprecated Zen models cross-checked against gateway response (issue #182), `freeOnly`, and credential-aware paid-model filtering).
+3. `fetchModels()` — live GET `modelsUrl` with retry/backoff/timeout (default Zen uses `/zen/v1/models`; the source-disabled V2 experiment uses `/inference/v1/models`; Go remains `/zen/go/v1/models`) → `filterAvailableModels()` (drops unsupported catalog entries, `KNOWN_UNAVAILABLE_MODEL_IDS`, deprecated Zen models cross-checked against gateway response (issue #182), `freeOnly`, and credential-aware paid-model filtering).
 4. Per model: `resolveModelMetadata()` → `resolveModelRouting()` → `modelLimits()` → `modelCapabilities()` → `modelConfigurationSchema()` (thinking submenu + context-size tier) → build `OpenCodeModel` (general variant or `::agent-host` variant with `targetChatSessionType: "copilotcli"`).
 
 ### 5.3 Chat Request (`provideLanguageModelChatResponse`)
@@ -376,7 +376,7 @@ Reuse these before writing new logic (all under `src/` root unless noted):
 ### Security
 
 - **API keys only** via BYOK `options.configuration.apiKey` → SecretStorage mirror (`opencodego.apiKey` / `opencodezen.apiKey`). Never logged, never hardcoded, never in error messages.
-- Keys only ever sent as an auth header (Zen V2 and Go chat/responses: `Authorization`; Go messages: `x-api-key`; Go Google: `x-goog-api-key`). Anonymous Zen requests send no key header.
+- Keys only ever sent as an auth header (Zen legacy/V2 and Go chat/responses: `Authorization`; Go messages: `x-api-key`; Go Google: `x-goog-api-key`). Anonymous legacy Zen requests use the official `Bearer public` sentinel; V2 anonymous requests omit auth.
 - `reasoningContentByToolCallId` capped at 500 (per-call reasoning echo).
 
 ### Resilience
@@ -476,7 +476,7 @@ On push/PR to `main`/`develop`, Node 20: `npm ci` → `compile` → `lint` (with
 - **Activation:** `onStartupFinished`, `onLanguageModelChatProvider:opencodego`, `onLanguageModelChatProvider:opencodezen`
 - **Contribution points:** `commands` (16), `configuration` (35+ keys), `languageModelChatProviders` (4 vendors: `opencodego`, `opencodezen`, `opencodego-agent`, `opencodezen-agent`)
 - **4 providers:** Go (paid) + Zen (free default) + agent-host variants mirroring each base vendor
-- **Endpoints:** Go `https://opencode.ai/zen/go/v1/{models,chat/completions,messages,responses}`; Zen V2 `https://opencode.ai/inference/{v1/models,openai/v1/chat/completions,openai/v1/responses,anthropic/v1/messages,google/v1beta/models}`; Go usage `https://opencode.ai/zen/go/v1/usage`; metadata `https://models.dev/api.json`
+- **Endpoints:** Go `https://opencode.ai/zen/go/v1/{models,chat/completions,messages,responses}`; default Zen `https://opencode.ai/zen/v1/{models,chat/completions,messages,responses,models/<model>:streamGenerateContent}`; experimental Zen V2 `https://opencode.ai/inference/{v1/models,openai/v1/chat/completions,openai/v1/responses,anthropic/v1/messages,google/v1beta/models}`; Go usage `https://opencode.ai/zen/go/v1/usage`; metadata `https://models.dev/api.json`
 
 ---
 
@@ -484,7 +484,7 @@ On push/PR to `main`/`develop`, Node 20: `npm ci` → `compile` → `lint` (with
 
 - `docs/architecture/01-20260514-open-code-provider-architecture.md` — provider/BYOK/usage history
 - `docs/architecture/02-20260809-provider-adapter-architecture.md` — adapter architecture + migration plan
-- `docs/architecture/03-20260923-opencode-v2-zen-inference.md` — V2 Zen inference contract and migration
+- `docs/architecture/03-20260923-opencode-v2-zen-inference.md` — default OpenCode-compatible Zen transport and source-disabled V2 experiment
 - `docs/features/16-20260813-usage-dashboard-realtime.md` — usage dashboard living reference
 - `docs/features/17-20260814-data-driven-model-registry.md` — data-driven registry (user-maintained)
 - `docs/issues/67-20260814-pr155-split-god-files-review-merge.md` — god-file split PR review (user-maintained)

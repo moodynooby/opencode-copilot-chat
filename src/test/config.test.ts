@@ -15,6 +15,9 @@ import {
   DEFAULT_INLINE_TIMEOUT_MS,
   DEFAULT_GO_API_BASE_URL,
   DEFAULT_ZEN_API_BASE_URL,
+  DEFAULT_ZEN_LEGACY_API_BASE_URL,
+  OPEN_CODE_GATEWAY_VERSION,
+  ZEN_TRANSPORT_MODE,
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
   DEFAULT_REQUEST_TIMEOUT_MS,
@@ -218,7 +221,13 @@ describe("config — references", () => {
 describe("config — provider API URLs", () => {
   it("builds routes from the default bases", () => {
     assert.equal(appendApiPath(DEFAULT_GO_API_BASE_URL, "/chat/completions"), "https://opencode.ai/zen/go/v1/chat/completions");
+    assert.equal(
+      appendApiPath(`${DEFAULT_ZEN_LEGACY_API_BASE_URL}/`, "v1/chat/completions"),
+      "https://opencode.ai/zen/v1/chat/completions",
+    );
     assert.equal(appendApiPath(`${DEFAULT_ZEN_API_BASE_URL}/`, "v1/models"), "https://opencode.ai/inference/v1/models");
+    assert.equal(ZEN_TRANSPORT_MODE, "legacy");
+    assert.equal(OPEN_CODE_GATEWAY_VERSION, "1.18.0");
   });
 
   it("normalizes safe custom HTTP(S) bases and rejects unsafe values", () => {

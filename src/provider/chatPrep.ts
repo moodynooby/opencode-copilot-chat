@@ -94,7 +94,7 @@ export async function prepareChatRequest(
     await deps.context.secrets.get(secretKeyFor(deps.baseVendor)),
   );
 
-  if (!apiKey && (deps.baseVendor === GO_VENDOR || !isAnonymousZenModel(rawModelId))) {
+  if (!apiKey && (deps.baseVendor === GO_VENDOR || !isAnonymousZenModel(rawModelId, deps.definition.zenTransportMode))) {
     throw new Error(
       `${deps.definition.displayName} API key is required for this model. Use the ${deps.definition.displayName} gear icon in Language Models to configure it, then reload the window.`,
     );

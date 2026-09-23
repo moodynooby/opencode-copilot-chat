@@ -10,6 +10,7 @@ import {
   DEFAULT_USAGE_CHART_DAYS,
   DEFAULT_ZEN_API_BASE_URL,
   GO_EVER_TRACKED_KEY,
+  ZEN_TRANSPORT_MODE,
   GO_SERVER_USAGE_KEY,
   SETTING_AGENTS_WINDOW,
   SETTING_AUTO_ENABLE_AGENTS_WINDOW,
@@ -18,6 +19,7 @@ import {
   SETTING_SHOW_USAGE_STATUS_BAR,
   SETTING_USAGE_CHART_DAYS,
   ZEN_API_BASE_URL_SETTING,
+  defaultZenApiBaseUrl,
   normalizeApiBaseUrl,
   secretKeyFor,
 } from "./config";
@@ -163,11 +165,17 @@ export function activate(context: vscode.ExtensionContext) {
   // section, which would misread the Zen flag as opencodego.opencodezen.enabled.
   const goProviderEnabled = vscode.workspace.getConfiguration().get<boolean>(providerEnabledSetting(GO_VENDOR), true);
   const zenProviderEnabled = vscode.workspace.getConfiguration().get<boolean>(providerEnabledSetting(ZEN_VENDOR), true);
-  const configuredZenBaseUrl = normalizeApiBaseUrl(
-    vscode.workspace.getConfiguration().get<string>(ZEN_API_BASE_URL_SETTING, DEFAULT_ZEN_API_BASE_URL),
-    DEFAULT_ZEN_API_BASE_URL,
-  );
-  const providers = createProviderDefinitions(configuredZenBaseUrl);
+  // V2 is intentionally source-disabled for now. In the default legacy mode
+  // ignore the experimental V2 URL setting; changing ZEN_TRANSPORT_MODE to
+  // "v2" in config.ts enables that path and its override.
+  const configuredZenBaseUrl =
+    ZEN_TRANSPORT_MODE === "legacy"
+      ? defaultZenApiBaseUrl()
+      : normalizeApiBaseUrl(
+          vscode.workspace.getConfiguration().get<string>(ZEN_API_BASE_URL_SETTING, DEFAULT_ZEN_API_BASE_URL),
+          DEFAULT_ZEN_API_BASE_URL,
+        );
+  const providers = createProviderDefinitions(configuredZenBaseUrl, ZEN_TRANSPORT_MODE);
   const goProvider = new OpenCodeProvider(context, providers[GO_VENDOR]);
   const zenProvider = new OpenCodeProvider(context, providers[ZEN_VENDOR]);
   const modelInfoProviders: OpenCodeProvider[] = [goProvider, zenProvider];

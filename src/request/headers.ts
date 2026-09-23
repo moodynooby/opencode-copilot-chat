@@ -28,7 +28,7 @@ export function auxiliarySessionId(context: vscode.ExtensionContext): string {
   if (existing && existing.trim()) {
     return cleanHeaderValue(existing);
   }
-  const id = cleanHeaderValue(`vscode-aux-${randomUUID()}`);
+  const id = cleanHeaderValue(`ses_${randomUUID().replace(/-/g, "").slice(0, 26)}`);
   void context.globalState.update(AUX_SESSION_STATE_KEY, id);
   return id;
 }
@@ -119,16 +119,18 @@ export function buildOpenCodeRequestHeaders(
       "threadID",
       "session.id",
       "chatSession.id",
-    ]) ?? `vscode-${stableHash(conversationAnchor(messages, modelId))}`,
+    ]) ?? `ses_${stableHash(conversationAnchor(messages, modelId)).slice(0, 26)}`,
   );
   const requestId = cleanHeaderValue(
     findStringOption(options, ["requestId", "requestID", "messageId", "messageID"]) ??
-      `req-${stableHash(`${String(Date.now())}-${String(Math.random())}-${sessionId}-${modelId}`)}`,
+      `msg_${stableHash(`${String(Date.now())}-${String(Math.random())}-${sessionId}-${modelId}`).slice(0, 26)}`,
   );
 
   const projectCacheKey = resolveProjectCacheKey(modelId);
   const headers: Record<string, string> = {
     "x-opencode-session": sessionId,
+    "x-session-affinity": sessionId,
+    "x-session-id": sessionId,
     "x-opencode-request": requestId,
     "x-opencode-client": OPEN_CODE_CLIENT,
     "User-Agent": getUserAgent(),

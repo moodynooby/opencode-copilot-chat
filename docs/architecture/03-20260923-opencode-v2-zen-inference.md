@@ -1,8 +1,8 @@
 **Status:** 🟢 Active
 
-# OpenCode V2 Zen Inference Integration
+# OpenCode Zen Transport Integration
 
-**Topic:** provider / routing / authentication / models / OpenCode V2
+**Topic:** provider / routing / authentication / models / OpenCode / V2
 **Updated:** 2026-09-24
 **Tags:** #provider #routing #authentication #models #opencode #v2 #byok
 **Supersedes:** -
@@ -11,57 +11,75 @@
 
 ## Overview
 
-This fork's OpenCode Zen provider is a standalone client for the OpenCode V2 Console inference API. It is independent of the legacy `/zen/v1` gateway and does not silently fall back to that API. OpenCode Go remains a separate provider with its existing contract.
+OpenCode Zen follows the current OpenCode client flow by default. The default transport is the official OpenCode-compatible `/zen/v1` gateway, including its `public` no-key sentinel. The newer Console V2 transport remains implemented as an experimental, source-only path; it is not selected by a user setting and there is no automatic fallback between transports.
 
-The model catalog is fetched dynamically from:
+OpenCode Go remains a separate provider with its existing contract.
 
-```text
-GET https://opencode.ai/inference/v1/models
+The model catalog is fetched dynamically from the active transport. The bundled model list is only an offline fallback. Catalog-only System One and test entries are filtered because this extension exposes conversational Language Model Chat models, not the System One API.
+
+## Transport modes
+
+`ZEN_TRANSPORT_MODE` in `src/config.ts` is the single source-level selector:
+
+```ts
+export const ZEN_TRANSPORT_MODE: ZenTransportMode = "legacy";
 ```
 
-The bundled model list is only an offline fallback. Catalog-only System One and test entries are filtered because this extension exposes conversational Language Model Chat models, not the System One API.
+Change that literal to `"v2"` in a source patch to experiment with the alternate transport. This is intentionally not a VS Code setting yet.
 
-## V2 endpoint contract
+### Default legacy/OpenCode-compatible transport
+
+| API family              | Endpoint                                       |
+| ----------------------- | ---------------------------------------------- |
+| Model catalog           | `/zen/v1/models`                               |
+| OpenAI Chat Completions | `/zen/v1/chat/completions`                     |
+| OpenAI Responses        | `/zen/v1/responses`                            |
+| Anthropic Messages      | `/zen/v1/messages`                             |
+| Google Gemini           | `/zen/v1/models/<model>:streamGenerateContent` |
+
+A configured service-account key is sent as `Authorization: Bearer <key>`. With no key, the extension sends the official public sentinel:
+
+```http
+Authorization: Bearer public
+```
+
+The current gateway applies a client/tool policy to public free models. Until a real Copilot Chat request has been verified against that policy, anonymous discovery remains limited to the conservative allowlist in `src/config.ts`; other free models are available after a key is configured.
+
+### Experimental V2 Console transport
 
 | API family              | Endpoint                                                        |
 | ----------------------- | --------------------------------------------------------------- |
+| Model catalog           | `/inference/v1/models`                                          |
 | OpenAI Chat Completions | `/inference/openai/v1/chat/completions`                         |
 | OpenAI Responses        | `/inference/openai/v1/responses`                                |
 | Anthropic Messages      | `/inference/anthropic/v1/messages`                              |
 | Google Gemini           | `/inference/google/v1beta/models/<model>:streamGenerateContent` |
 
-`opencodezen.apiBaseUrl` defaults to `https://opencode.ai/inference`; all four routes are derived from it.
+V2 uses a real Console service-account key for authenticated requests and does not accept the legacy `public` sentinel. `opencodezen.apiBaseUrl` is read only when the source selector is changed to `"v2"`; its default remains the V2 base URL for that experimental path.
 
 ## Authentication and identity
 
-Paid Zen inference uses a Console service-account key:
+Zen requests use the official OpenCode header shape:
 
-```http
-Authorization: Bearer <service-account-key>
-```
-
-The same Bearer header is used for OpenAI, Anthropic, and Google V2 routes. `space-bunny-free` is currently verified for anonymous Chat Completions access. Other free models, including free models routed through Responses, Google, or Anthropic, require a key. Anonymous requests never send `Bearer undefined`. Paid and endpoint-restricted free models are hidden without a key and rejected before dispatch if a key disappears after discovery.
-
-Requests use the official OpenCode client header shape:
-
-- `User-Agent: opencode/<version>`
+- `User-Agent: opencode/latest/1.18.0/app` (the public gateway's minimum supported client identity)
 - `x-opencode-client: app`
-- `x-opencode-session: <stable-session-id>`
-- `x-opencode-request: <request-id>`
+- `x-opencode-session: ses_<id>`
+- `x-session-affinity` and `x-session-id` matching the session
+- `x-opencode-request: msg_<id>`
 - `x-opencode-project: <stable-project-cache-key>`
 
-Go keeps its existing provider-specific authentication headers.
+The gateway version is deliberately separate from the extension package version. Go keeps its existing provider-specific authentication headers.
 
 ## Model discovery
 
-`ModelListFetcher` reads the live V2 catalog and applies, in order:
+`ModelListFetcher` reads the live catalog for the active transport and applies, in order:
 
 1. Unsupported catalog-entry filtering (`jev-*`, `test`, and `test-novita-dsf4.1`).
 2. Availability/deprecation filtering.
 3. `freeOnly` filtering.
 4. Credential-aware filtering: anonymous callers see the verified keyless model set only; authenticated callers may see paid and other free models.
 
-Catalog snapshots are cached by provider, endpoint, and a SHA-256 credential scope. This prevents one workspace's model permissions from being reused for another key. The cache prefix and metadata revision are versioned so the V2 migration abandons legacy snapshots.
+Catalog snapshots are cached by provider, endpoint, transport-specific URL, and a SHA-256 credential scope. This prevents one workspace's model permissions from being reused for another key. The cache prefix is versioned so the transport switch abandons incompatible snapshots.
 
 ## Routing
 
@@ -72,8 +90,8 @@ The model registry remains the source of truth:
 - Zen Gemini → Google Generative AI.
 - Other supported conversational families → Chat Completions.
 
-Google uses a dedicated model-base URL because the V2 catalog URL and Gemini route no longer share the legacy `/models` base.
+The active transport supplies the base URL; the registry supplies the API family. Go routing is unchanged.
 
 ## Verification
 
-The implementation is covered by unit tests for URL derivation, routing, provider-aware auth, anonymous filtering, credential-scoped catalog caching, and OpenCode identity headers. `npm run lint` is the required repository gate; live validation should cover one free anonymous request and one authenticated request per transport family.
+The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, and OpenCode identity headers. `npm run lint` is the required repository gate. Live validation must cover a catalog request and a streaming request through the same request path used by Copilot Chat; the public gateway can still reject free models based on its client/tool policy.

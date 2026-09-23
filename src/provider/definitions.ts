@@ -3,11 +3,13 @@ import {
   appendApiPath,
   ANONYMOUS_ZEN_MODEL_IDS,
   CONFIG_SECTION,
-  DEFAULT_ZEN_API_BASE_URL,
-  EXTENSION_ID,
-  FALLBACK_USER_AGENT,
   normalizeApiBaseUrl,
+  OPEN_CODE_CLIENT,
+  OPEN_CODE_GATEWAY_VERSION,
   SETTING_FREE_ONLY,
+  ZEN_TRANSPORT_MODE,
+  defaultZenApiBaseUrl,
+  type ZenTransportMode,
 } from "../config";
 import { lookupModelRegistryEntry, type ModelEndpointKind } from "../core/registry";
 import { isFreeModel } from "../models/metadata";
@@ -30,6 +32,8 @@ export interface ProviderDefinition {
   testModelId: string;
   fallbackModels: string[];
   filterModel?: (modelId: string, apiKey?: string) => boolean;
+  /** Source-selected Zen transport; omitted for Go. */
+  zenTransportMode?: ZenTransportMode;
   /** When true, this provider only serves agent-host models (targetChatSessionType=copilotcli). */
   isAgentVariant?: boolean;
   /** The vendor key for the main (non-agent) provider definition this variant mirrors. */
@@ -43,12 +47,12 @@ let cachedUserAgent: string | undefined;
  *
  * The request is intentionally identified as an OpenCode application so the
  * gateway can apply the same client/session handling as the real OpenCode CLI.
+ * The gateway client version is deliberately independent of this extension's
+ * package version; the public legacy tier currently requires OpenCode 1.18+.
  */
 export function getUserAgent(): string {
   if (cachedUserAgent) return cachedUserAgent;
-  const packageJSON = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON as { version?: unknown } | undefined;
-  const version = typeof packageJSON?.version === "string" ? packageJSON.version : undefined;
-  cachedUserAgent = version ? `opencode/${version}` : FALLBACK_USER_AGENT;
+  cachedUserAgent = `opencode/latest/${OPEN_CODE_GATEWAY_VERSION}/${OPEN_CODE_CLIENT}`;
   return cachedUserAgent;
 }
 
@@ -64,7 +68,7 @@ export { isTransientFetchError } from "../retry";
 /** Catalog entries that are not conversational chat models. */
 const UNSUPPORTED_ZEN_MODEL_IDS = new Set(["test", "test-novita-dsf4.1"]);
 
-/** Return whether a V2 catalog model can be served by this extension. */
+/** Return whether a Zen catalog model can be served by this extension. */
 export function isSupportedZenModel(modelId: string): boolean {
   return !UNSUPPORTED_ZEN_MODEL_IDS.has(modelId) && !/^jev-/i.test(modelId);
 }
@@ -72,27 +76,24 @@ export function isSupportedZenModel(modelId: string): boolean {
 /**
  * Return whether a Zen model can be called without a Console key.
  *
- * The anonymous Console tier is model-specific: the live V2 catalog does not
- * expose an `allowAnonymous` flag, so we keep a small verified allowlist rather
- * than assuming every `-free` model is callable without a key. Free models
- * outside the allowlist remain available after a key is configured.
+ * The official OpenCode-compatible legacy gateway accepts the `public` sentinel,
+ * but its public free tier also applies a client/tool policy. Until a real
+ * Copilot Chat request has been verified against that policy, keep the same
+ * conservative model allowlist used by the V2 path.
  */
-export function isAnonymousZenModel(modelId: string): boolean {
-  return (
-    ANONYMOUS_ZEN_MODEL_IDS.has(modelId) &&
-    isFreeModel(modelId) &&
-    isSupportedZenModel(modelId) &&
-    lookupModelRegistryEntry(modelId, ZEN_VENDOR).endpointKind === "chat-completions"
-  );
+export function isAnonymousZenModel(modelId: string, _mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
+  if (!isFreeModel(modelId) || !isSupportedZenModel(modelId)) return false;
+  if (lookupModelRegistryEntry(modelId, ZEN_VENDOR).endpointKind !== "chat-completions") return false;
+  return ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
 }
 
-function zenModelAllowed(modelId: string, apiKey: string | undefined): boolean {
+function zenModelAllowed(modelId: string, apiKey: string | undefined, mode: ZenTransportMode): boolean {
   if (!isSupportedZenModel(modelId)) {
     return false;
   }
 
   const hasCredential = typeof apiKey === "string" && apiKey.trim().length > 0;
-  if (!hasCredential && !isAnonymousZenModel(modelId)) {
+  if (!hasCredential && !isAnonymousZenModel(modelId, mode)) {
     return false;
   }
 
@@ -118,6 +119,7 @@ function providerVariant(
     testModelId: base.testModelId,
     fallbackModels: base.fallbackModels,
     filterModel: base.filterModel,
+    zenTransportMode: base.zenTransportMode,
   };
 }
 
@@ -200,9 +202,10 @@ const ZEN_V2_FALLBACK_MODELS = [
   "qwen3.8-flash",
 ];
 
-/** Build provider definitions, allowing the V2 inference base URL to be overridden. */
+/** Build provider definitions for the source-selected Zen transport. */
 export function createProviderDefinitions(
-  zenApiBaseUrl: string = DEFAULT_ZEN_API_BASE_URL,
+  zenApiBaseUrl: string = defaultZenApiBaseUrl(),
+  zenTransportMode: ZenTransportMode = ZEN_TRANSPORT_MODE,
 ): Record<ProviderDefinition["vendor"], ProviderDefinition> {
   const go: ProviderDefinition = {
     vendor: GO_VENDOR,
@@ -245,19 +248,20 @@ export function createProviderDefinitions(
     ],
   };
 
-  const zenBaseUrl = normalizeApiBaseUrl(zenApiBaseUrl, DEFAULT_ZEN_API_BASE_URL);
+  const zenBaseUrl = normalizeApiBaseUrl(zenApiBaseUrl, defaultZenApiBaseUrl(zenTransportMode));
   const zen: ProviderDefinition = {
     vendor: ZEN_VENDOR,
     displayName: "OpenCode Zen",
     modelNamePrefix: "OpenCode Zen",
     modelsUrl: appendApiPath(zenBaseUrl, "v1/models"),
-    chatCompletionsUrl: appendApiPath(zenBaseUrl, "openai/v1/chat/completions"),
-    messagesUrl: appendApiPath(zenBaseUrl, "anthropic/v1/messages"),
-    responsesUrl: appendApiPath(zenBaseUrl, "openai/v1/responses"),
-    googleModelsUrl: appendApiPath(zenBaseUrl, "google/v1beta/models"),
+    chatCompletionsUrl: appendApiPath(zenBaseUrl, zenTransportMode === "legacy" ? "v1/chat/completions" : "openai/v1/chat/completions"),
+    messagesUrl: appendApiPath(zenBaseUrl, zenTransportMode === "legacy" ? "v1/messages" : "anthropic/v1/messages"),
+    responsesUrl: appendApiPath(zenBaseUrl, zenTransportMode === "legacy" ? "v1/responses" : "openai/v1/responses"),
+    googleModelsUrl: appendApiPath(zenBaseUrl, zenTransportMode === "legacy" ? "v1/models" : "google/v1beta/models"),
     testModelId: "space-bunny-free",
     fallbackModels: ZEN_V2_FALLBACK_MODELS,
-    filterModel: zenModelAllowed,
+    filterModel: (modelId, apiKey) => zenModelAllowed(modelId, apiKey, zenTransportMode),
+    zenTransportMode,
   };
 
   return {

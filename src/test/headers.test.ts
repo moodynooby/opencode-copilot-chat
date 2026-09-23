@@ -42,8 +42,10 @@ describe("OpenCode application request identity", () => {
 
     assert.equal(headers["x-opencode-client"], "app");
     assert.equal(headers["x-opencode-session"], "session-test");
+    assert.equal(headers["x-session-affinity"], "session-test");
+    assert.equal(headers["x-session-id"], "session-test");
     assert.equal(headers["x-opencode-request"], "request-test");
-    assert.match(headers["User-Agent"], /^opencode\//);
+    assert.match(headers["User-Agent"], /^opencode\/latest\//);
     assert.match(headers["x-opencode-project"], /^[a-f0-9]{64}$/);
   });
 });
