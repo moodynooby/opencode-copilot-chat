@@ -93,9 +93,25 @@ export function installVscodeMock(): void {
     isTrusted = false;
     appendMarkdown(_text) {}
   }
+  class LanguageModelTextPart {
+    constructor(value) { this.value = value; }
+  }
+  class LanguageModelToolCallPart {
+    constructor(callId, name, input) { this.callId = callId; this.name = name; this.input = input; }
+  }
+  class LanguageModelToolResultPart {
+    constructor(callId, content) { this.callId = callId; this.content = content; }
+  }
+  class LanguageModelDataPart {
+    constructor(mimeType, data) { this.mimeType = mimeType; this.data = data; }
+  }
   module.exports = {
     ExtensionContext: class {},
     MarkdownString,
+    LanguageModelTextPart,
+    LanguageModelToolCallPart,
+    LanguageModelToolResultPart,
+    LanguageModelDataPart,
     // getUserAgent() probes the extension's package.json for the version;
     // returning undefined falls back to the default UA string.
     extensions: { getExtension: () => undefined },
