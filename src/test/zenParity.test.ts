@@ -39,7 +39,7 @@ describe("Zen Model Request & Header Parity", () => {
 
     assert.ok(reqHeaders["x-opencode-session"], "should have x-opencode-session header");
     assert.ok(reqHeaders["x-opencode-request"], "should have x-opencode-request header");
-    assert.equal(reqHeaders["x-opencode-client"], "opencode");
+    assert.equal(reqHeaders["x-opencode-client"], "vscode-copilot-chat");
     assert.ok(reqHeaders["User-Agent"]);
   });
 
