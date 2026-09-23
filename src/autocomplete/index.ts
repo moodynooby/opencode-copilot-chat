@@ -56,6 +56,8 @@ export interface InlineCompletionsDeps {
   chatCompletionsUrl: string;
   /** Resolve the API key to use (extension secret / BYOK group key). */
   resolveApiKey: () => Promise<string | undefined>;
+  /** OpenCode-compatible User-Agent for gateway requests. */
+  userAgent: string;
   /** Day boundary for the completion counters (defaults to UTC). */
   resolveCompletionDayStart?: () => number;
   log?: (msg: string) => void;
@@ -123,6 +125,7 @@ export function registerInlineCompletions(context: vscode.ExtensionContext, deps
         chatCompletionsUrl: deps.chatCompletionsUrl,
         apiKey,
         sessionId: auxiliarySessionId(context),
+        userAgent: deps.userAgent,
         timeoutMs: readNumberSetting(INLINE_TIMEOUT_MS_SETTING, DEFAULT_INLINE_TIMEOUT_MS, 500, 15_000),
         log: (msg) => {
           log(msg);

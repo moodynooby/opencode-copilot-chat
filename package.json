@@ -1,9 +1,12 @@
 {
   "name": "opencode-copilot-chat",
-  "displayName": "OpenCode for Copilot Chat: BYOK 30+ AI Models",
-  "description": "Use 30+ frontier AI models (DeepSeek V4, Kimi K2.6, GLM-5.1, Qwen3.7, MiMo V2.5, MiniMax M2.7, free Claude Opus, GPT-5.5, Gemini 3.5, Grok) in GitHub Copilot Chat. Bring Your Own Key, no Copilot Pro needed.",
+  "displayName": "OpenCode for Copilot Chat: V2 Zen + Go",
+  "description": "Use OpenCode V2 Zen and Go models in GitHub Copilot Chat with live model discovery, native tool calling, optional anonymous Zen access, and Console BYOK.",
   "version": "0.7.6",
-  "publisher": "ltmoerdani",
+  "publisher": "moodynooby",
+  "author": {
+    "name": "MoodyNooby"
+  },
   "license": "MIT",
   "icon": "media/opencodego.png",
   "galleryBanner": {
@@ -39,12 +42,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ltmoerdani/opencode-copilot-chat.git"
+    "url": "https://github.com/moodynooby/moodynooby-copilot-chat.git"
   },
   "bugs": {
-    "url": "https://github.com/ltmoerdani/opencode-copilot-chat/issues"
+    "url": "https://github.com/moodynooby/moodynooby-copilot-chat/issues"
   },
-  "homepage": "https://github.com/ltmoerdani/opencode-copilot-chat#readme",
+  "homepage": "https://github.com/moodynooby/moodynooby-copilot-chat#readme",
   "engines": {
     "vscode": "^1.125.0"
   },
@@ -211,8 +214,8 @@
         },
         "opencodezen.apiBaseUrl": {
           "type": "string",
-          "default": "https://opencode.ai/zen/v1",
-          "description": "Base URL for the OpenCode Zen-compatible API. The extension appends /models, /chat/completions, /messages, and /responses. Requires a window reload after changing."
+          "default": "https://opencode.ai/inference",
+          "description": "Base URL for the OpenCode Zen V2 inference API. The extension derives the model catalog, OpenAI, Anthropic, and Google routes from this value. Requires a window reload after changing."
         },
         "opencodego.maxTokens": {
           "type": "number",
@@ -281,7 +284,7 @@
         "opencodego.autoEnableAgentsWindow": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "When `#opencodego.agentsWindow#` is on, automatically enable the VS Code core settings the Agents window support depends on: `chat.agentHost.byokModels.enabled` (BYOK model bridge, experimental, off by default) and `extensions.supportAgentsWindow: { \"ltmoerdani.opencode-copilot-chat\": true }` (without this the extension is disabled in the Agents window process and its providers, including the '+ Add Models' vendors, are missing). The extension records the values it flips and reverts them when `agentsWindow` is disabled. A window reload is required after the first auto-enable. Disable to manage those settings manually."
+          "markdownDescription": "When `#opencodego.agentsWindow#` is on, automatically enable the VS Code core settings the Agents window support depends on: `chat.agentHost.byokModels.enabled` (BYOK model bridge, experimental, off by default) and `extensions.supportAgentsWindow: { \"moodynooby.opencode-copilot-chat\": true }` (without this the extension is disabled in the Agents window process and its providers, including the '+ Add Models' vendors, are missing). The extension records the values it flips and reverts them when `agentsWindow` is disabled. A window reload is required after the first auto-enable. Disable to manage those settings manually."
         },
         "opencodego.showAgentModelsInManagePanel": {
           "type": "boolean",
@@ -485,14 +488,11 @@
         "when": "config.opencodezen.enabled",
         "configuration": {
           "type": "object",
-          "required": [
-            "apiKey"
-          ],
           "properties": {
             "apiKey": {
               "type": "string",
-              "title": "OpenCode Zen API Key",
-              "description": "Enter your OpenCode Zen API key.",
+              "title": "OpenCode Zen API Key (paid models)",
+              "description": "Optional for free models. Enter an OpenCode Console service-account key to enable paid models and workspace-aware access.",
               "secret": true
             }
           }

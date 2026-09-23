@@ -3,7 +3,7 @@
 # OpenCode Provider Architecture
 
 **Topic:** provider / models / routing / usage / security
-**Updated:** 2026-06-24
+**Updated:** 2026-09-24
 **Tags:** #provider #models #routing #byok #vscode #tool-calling #thinking #usage #security
 **Supersedes:** -
 **Original Session:** 2026-05-14
@@ -20,10 +20,10 @@ OpenCode Copilot Chat is a VS Code extension that registers OpenCode models as n
 
 The extension exposes two independent BYOK providers:
 
-| Provider     | Vendor ID     | Purpose                                       | Model Source                           |
-| ------------ | ------------- | --------------------------------------------- | -------------------------------------- |
-| OpenCode Go  | `opencodego`  | Paid Go/top-up models                         | `https://opencode.ai/zen/go/v1/models` |
-| OpenCode Zen | `opencodezen` | Free Zen models by default, paid Zen optional | `https://opencode.ai/zen/v1/models`    |
+| Provider     | Vendor ID     | Purpose                                       | Model Source                              |
+| ------------ | ------------- | --------------------------------------------- | ----------------------------------------- |
+| OpenCode Go  | `opencodego`  | Paid Go/top-up models                         | `https://opencode.ai/zen/go/v1/models`    |
+| OpenCode Zen | `opencodezen` | Free Zen models by default, paid Zen optional | `https://opencode.ai/inference/v1/models` |
 
 Both providers can be configured at the same time through VS Code **Language Models → Add Models...**. Each provider group owns its own API key secret in VS Code's native provider configuration flow, so Go and Zen can be added, configured, and removed separately.
 
@@ -57,6 +57,10 @@ This document is intentionally backdated to the original provider-architecture s
 | 2026-08-11 | 0.5.2      | PR [#126](https://github.com/ltmoerdani/opencode-copilot-chat/pull/126) (follow-up on #123): extracted `shouldEchoThinkingHistory()` and the `LanguageModelThinkingPart.value` normalization into a new pure module `src/reasoningHistory.ts` (`thinkingTextFromValue()` + `shouldEchoThinkingHistory()`) with a +16-test regression suite covering every model family including the issue #38 MiMo carve-out (177/177 pass). Added the `typeof vscode.LanguageModelThinkingPart === "function"` runtime guard to `thinkingPartText()` in `src/extension.ts`, mirroring the defensive pattern already used in `src/streaming.ts`. No behavior change. See `docs/issues/59-20260811-pr126-reasoning-history-guard-tests.md`.                                                                                                                                                                                                                                                                                                                                                                                                        | ✅ Solved |
 | 2026-08-12 | Unreleased | PR [#129](https://github.com/ltmoerdani/opencode-copilot-chat/pull/129): strict-but-sane lint stack + intelligent pre-commit gate. ESLint keeps `strict` + `strictTypeChecked` (the bug-catchers), drops the pure-`stylistic` layer that fought prettier. `npm run lint` now ends with a Tests step. New `scripts/staged-lint.ts` lints staged files **plus their direct import dependents** so changing a module can never leave type-aware errors in its consumers. Branch also carries unified `lint.ts`/`format.ts` runners, `editorconfig-checker` + `shellcheck` + `tsconfig.check.json` type-check (covers `scripts/`), eslint 10.8.1, `@types/node` 26.2 (supersedes dependabot #91). Post-review refinements: all 217 `void describe/it/test` prefixes dropped from test files (`22e04b7`), `@ts-expect-error` allowed while `@ts-ignore` stays banned (`5246434`), TypeScript-first config (`eslint.config.ts` + typed scripts via `tsx`, `76570cc`), standard extensions only (`514a63f`), markdownlint config renamed to `.json` (`c817871`). See `docs/issues/61-20260812-pr129-strict-lint-stack-precommit-gate.md`. | ✅ Solved |
 | 2026-08-12 | Unreleased | Issue [#130](https://github.com/ltmoerdani/opencode-copilot-chat/issues/130) (PR [#132](https://github.com/ltmoerdani/opencode-copilot-chat/pull/132)): server-accurate Go usage meters via the official `/zen/go/v1/usage` endpoint. The status bar / tooltip / quick-pick / webview previously showed locally estimated Session/Weekly/Monthly percentages that drifted from opencode.ai (CLI, cross-device, pre-install usage were invisible). New pure module `src/goUsageSync.ts` (`fetchGoUsage` + `mergeServerUsage` + failure classifier) syncs the server meters with a 60s TTL; `spent` is derived from the authoritative percent, Today/Yesterday + per-session spend stay device-local. Failures fall back to the existing SQLite → tracked estimates. The key is only ever sent as the Authorization header and never logged or persisted. Also fixes a dead Reset action, a card that collapsed on reset, and a dead Open Console quick-pick. See `docs/issues/62-20260812-pr132-go-usage-server-sync.md`.                                                                                                           | ✅ Solved |
+
+### 2026-09-23 — OpenCode Zen V2 inference migration
+
+OpenCode Zen now uses the standalone V2 Console inference contract: live catalog discovery at `/inference/v1/models`, family-scoped OpenAI/Anthropic/Google routes, provider-aware Bearer authentication, and verified anonymous access for `space-bunny-free` through Chat Completions. Other free models and all paid models require a key. OpenCode Go remains on its existing gateway contract. The fork identifies requests with the official OpenCode app/session header shape while retaining its own extension identity (`moodynooby.opencode-copilot-chat`).
 
 ---
 
@@ -146,11 +150,11 @@ Model discovery uses this sequence:
 
 ### Live Sources
 
-| Provider     | Endpoint                               |
-| ------------ | -------------------------------------- |
-| OpenCode Go  | `https://opencode.ai/zen/go/v1/models` |
-| OpenCode Zen | `https://opencode.ai/zen/v1/models`    |
-| models.dev   | `https://models.dev/api.json`          |
+| Provider     | Endpoint                                  |
+| ------------ | ----------------------------------------- |
+| OpenCode Go  | `https://opencode.ai/zen/go/v1/models`    |
+| OpenCode Zen | `https://opencode.ai/inference/v1/models` |
+| models.dev   | `https://models.dev/api.json`             |
 
 ### Metadata Resolution
 
@@ -194,29 +198,30 @@ Known unavailable Zen entries are filtered before registration so stale or tempo
 
 ## Endpoint Routing
 
-Routing is centralized in `src/routing.ts`.
+Routing is centralized in `src/core/routing.ts`.
 
-| Condition                          | Endpoint Kind      | Endpoint                                    |
-| ---------------------------------- | ------------------ | ------------------------------------------- |
-| Zen GPT family (`gpt-*`)           | `responses`        | `/zen/v1/responses`                         |
-| Claude family                      | `messages`         | `/zen/v1/messages`                          |
-| Go MiniMax M2 family               | `messages`         | `/zen/go/v1/messages`                       |
-| Qwen 3.5/3.6 Plus and Qwen 3.7 Max | `messages`         | provider messages endpoint                  |
-| Zen Gemini family                  | `google`           | `streamGenerateContent?alt=sse` style route |
-| All other models                   | `chat-completions` | provider chat-completions endpoint          |
+| Condition                          | Endpoint Kind      | Endpoint                                                                |
+| ---------------------------------- | ------------------ | ----------------------------------------------------------------------- |
+| Zen GPT family (`gpt-*`)           | `responses`        | `/inference/openai/v1/responses`                                        |
+| Claude family                      | `messages`         | `/inference/anthropic/v1/messages`                                      |
+| Go MiniMax M2 family               | `messages`         | `/zen/go/v1/messages`                                                   |
+| Qwen 3.5/3.6 Plus and Qwen 3.7 Max | `messages`         | provider messages endpoint                                              |
+| Remaining Zen Qwen 3 family        | `messages`         | `/inference/anthropic/v1/messages`                                      |
+| Zen Gemini family                  | `google`           | `/inference/google/v1beta/models/<model>:streamGenerateContent?alt=sse` |
+| All other models                   | `chat-completions` | provider chat-completions endpoint                                      |
 
 The request layer maps VS Code chat parts and tools into the correct request body for the selected endpoint.
 
 ### Auth Header Mapping
 
-`src/openCodeAuth.ts` maps auth headers by endpoint type:
+`src/openCodeAuth.ts` keeps provider authentication separate from endpoint format:
 
-| Endpoint Kind      | Header                                   |
-| ------------------ | ---------------------------------------- |
-| `chat-completions` | `Authorization: Bearer <key>`            |
-| `responses`        | `Authorization: Bearer <key>`            |
-| `messages`         | `x-api-key: <key>` + `anthropic-version` |
-| `google`           | `x-goog-api-key: <key>`                  |
+| Provider / Endpoint                          | Header                                                                                                                           |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| OpenCode Zen V2 (all endpoint families)      | `Authorization: Bearer <service-account-key>` when a key is configured; anonymous free Chat Completions requests omit the header |
+| OpenCode Go `chat-completions` / `responses` | `Authorization: Bearer <key>`                                                                                                    |
+| OpenCode Go `messages`                       | `x-api-key: <key>` + `anthropic-version`                                                                                         |
+| OpenCode Go `google`                         | `x-goog-api-key: <key>`                                                                                                          |
 
 ---
 

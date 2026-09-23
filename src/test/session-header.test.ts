@@ -71,9 +71,9 @@ describe("x-opencode-session header on auxiliary gateway requests", () => {
     const fetcher = new ModelListFetcher({
       context: fakeContext() as never,
       definition: {
-        vendor: "opencodego",
-        displayName: "OpenCode Go",
-        modelsUrl: "https://opencode.ai/zen/go/v1/models",
+        vendor: "opencodezen",
+        displayName: "OpenCode Zen",
+        modelsUrl: "https://opencode.ai/inference/v1/models",
         fallbackModels: [],
       } as never,
       log: () => {},
@@ -83,11 +83,95 @@ describe("x-opencode-session header on auxiliary gateway requests", () => {
     const ids = await fetcher.fetch("sk-test");
     assert.deepEqual(ids, ["model-1"]);
     assert.equal(capture.length, 1);
+    assert.equal(capture[0].url, "https://opencode.ai/inference/v1/models");
+    assert.equal(capture[0].headers.authorization, "Bearer sk-test");
     const session = capture[0].headers["x-opencode-session"];
     assert.ok(
       session && session.startsWith("vscode-aux-"),
       `expected auxiliary session header, got: ${JSON.stringify(capture[0].headers)}`,
     );
+  });
+
+  it("ModelListFetcher scopes cached catalogs by credential", async () => {
+    const { ModelListFetcher } = await import("../provider/modelList.js");
+    const capture: CapturedRequest[] = [];
+    stubFetch(
+      capture,
+      () => new Response(JSON.stringify({ data: [{ id: "model-1" }] }), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+
+    const fetcher = new ModelListFetcher({
+      context: fakeContext() as never,
+      definition: {
+        vendor: "opencodezen",
+        displayName: "OpenCode Zen",
+        modelsUrl: "https://opencode.ai/inference/v1/models",
+        fallbackModels: [],
+      } as never,
+      log: () => {},
+      replaceLiveModelMetadata: () => {},
+      filterAvailableModels: (ids: string[]) => Promise.resolve(ids),
+    });
+
+    await fetcher.fetch("key-one");
+    await fetcher.fetch("key-two");
+    await fetcher.fetch("key-one");
+    assert.equal(capture.length, 2, "each credential gets one live fetch and then its own cache entry");
+  });
+
+  it("reapplies freeOnly filtering to the complete cached catalog", async () => {
+    const { ModelListFetcher } = await import("../provider/modelList.js");
+    const capture: CapturedRequest[] = [];
+    let freeOnly = true;
+    stubFetch(
+      capture,
+      () =>
+        new Response(JSON.stringify({ data: [{ id: "free-model" }, { id: "paid-model" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    const fetcher = new ModelListFetcher({
+      context: fakeContext() as never,
+      definition: {
+        vendor: "opencodezen",
+        displayName: "OpenCode Zen",
+        modelsUrl: "https://opencode.ai/inference/v1/models",
+        fallbackModels: ["bundled-only-model"],
+      } as never,
+      log: () => {},
+      replaceLiveModelMetadata: () => {},
+      filterAvailableModels: (ids: string[]) => Promise.resolve(freeOnly ? ids.filter((id) => id === "free-model") : ids),
+    });
+
+    assert.deepEqual(await fetcher.fetch("key-one"), ["free-model"]);
+    freeOnly = false;
+    assert.deepEqual(await fetcher.fetch("key-one"), ["free-model", "paid-model"]);
+    assert.equal(capture.length, 1, "changing the filter must not refetch the catalog");
+  });
+
+  it("treats a successful empty catalog as authoritative", async () => {
+    const { ModelListFetcher } = await import("../provider/modelList.js");
+    const capture: CapturedRequest[] = [];
+    stubFetch(capture, () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const fetcher = new ModelListFetcher({
+      context: fakeContext() as never,
+      definition: {
+        vendor: "opencodezen",
+        displayName: "OpenCode Zen",
+        modelsUrl: "https://opencode.ai/inference/v1/models",
+        fallbackModels: ["bundled-paid-model"],
+      } as never,
+      log: () => {},
+      replaceLiveModelMetadata: () => {},
+      filterAvailableModels: (ids: string[]) => Promise.resolve(ids),
+    });
+
+    assert.deepEqual(await fetcher.fetch("key-one"), []);
+    assert.deepEqual(await fetcher.fetch("key-one"), []);
+    assert.equal(capture.length, 1);
   });
 
   it("auxiliary session id is stable across calls and persisted in globalState", async () => {

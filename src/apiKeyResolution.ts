@@ -4,5 +4,9 @@ export function resolveResponseApiKey(
   registeredApiKey: string | undefined,
   storedApiKey: string | undefined,
 ): string | undefined {
-  return configuredApiKey || registeredApiKey || storedApiKey;
+  for (const candidate of [configuredApiKey, registeredApiKey, storedApiKey]) {
+    const key = candidate?.trim();
+    if (key) return key;
+  }
+  return undefined;
 }

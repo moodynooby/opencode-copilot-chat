@@ -32,7 +32,7 @@ export function resolveModelRouting(
       endpointUrl = provider.messagesUrl;
       break;
     case "google":
-      endpointUrl = `${provider.modelsUrl}/${modelId}`;
+      endpointUrl = `${provider.googleModelsUrl}/${modelId}`;
       break;
     default:
       endpointUrl = provider.chatCompletionsUrl;

@@ -195,7 +195,7 @@ export async function streamOpenCodeResponse(options: StreamOpenCodeResponseOpti
     // ------------------------------------------------------------------
     let payload = rawPayload;
     const fetchHeaders: Record<string, string> = {
-      ...(options.authHeaders ?? { Authorization: `Bearer ${options.apiKey}` }),
+      ...(options.authHeaders ?? (options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {})),
       "Content-Type": "application/json",
       Accept: "application/json",
       ...options.requestHeaders,

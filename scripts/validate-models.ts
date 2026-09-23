@@ -6,6 +6,7 @@
  * - buildPayload() from the thinking provider strategy
  * - resolveModelRouting() from routing.ts
  * - buildOpenCodeGatewayAuthHeaders() from openCodeAuth.ts
+ * - live Zen V2 catalog IDs with models.dev metadata as a best-effort supplement
  *
  * For EACH model, tests ALL thinking/reasoning parameter combinations against
  * the live OpenCode API to verify what actually works.
@@ -27,13 +28,14 @@ import { buildOpenCodeGatewayAuthHeaders } from "../src/openCodeAuth.js";
 const { values: args } = parseArgs({
   options: {
     "api-key": { type: "string" },
-    go: { type: "boolean", default: true },
-    "zen-free": { type: "boolean", default: true },
-    "zen-paid": { type: "boolean", default: false },
+    go: { type: "string", default: "true" },
+    "zen-free": { type: "string", default: "true" },
+    "zen-paid": { type: "string", default: "false" },
     families: { type: "string" },
     models: { type: "string" },
     "skip-models": { type: "string" },
     "dry-run": { type: "boolean", default: false },
+    anonymous: { type: "boolean", default: false },
     json: { type: "boolean", default: false },
     timeout: { type: "string", default: "30000" },
     help: { type: "boolean", short: "h" },
@@ -47,24 +49,31 @@ Usage: npx tsx scripts/validate-models.ts [options]
 Examples:
   npx tsx scripts/validate-models.ts --api-key YOUR_KEY
   npx tsx scripts/validate-models.ts --api-key YOUR_KEY --families deepseek,kimi
+  npx tsx scripts/validate-models.ts --anonymous --go=false --models space-bunny-free
   npx tsx scripts/validate-models.ts --dry-run
 `);
   process.exit(0);
 }
 
+function booleanOption(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  return value !== "false" && value !== "0";
+}
+
 const API_KEY = args["api-key"] ?? process.env.OPENCODE_API_KEY;
 const GO_BASE = process.env.OPENCODE_GO_URL ?? "https://opencode.ai/zen/go/v1";
-const ZEN_BASE = process.env.OPENCODE_ZEN_URL ?? "https://opencode.ai/zen/v1";
+const ZEN_BASE = process.env.OPENCODE_ZEN_URL ?? "https://opencode.ai/inference";
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const TIMEOUT_MS = Number(args.timeout) || 30000;
 
-const INCLUDE_GO = args.go;
-const INCLUDE_ZEN_FREE = args["zen-free"];
-const INCLUDE_ZEN_PAID = args["zen-paid"];
+const INCLUDE_GO = booleanOption(args.go, true);
+const INCLUDE_ZEN_FREE = booleanOption(args["zen-free"], true);
+const INCLUDE_ZEN_PAID = booleanOption(args["zen-paid"], false);
 const FAMILIES_FILTER = args.families?.split(",").map((f) => f.trim().toLowerCase());
 const MODELS_FILTER = args.models?.split(",").map((m) => m.trim());
 const SKIP_MODELS = new Set(args["skip-models"]?.split(",").map((m) => m.trim()) ?? []);
 const DRY_RUN = args["dry-run"];
+const ANONYMOUS = args.anonymous;
 const OUTPUT_JSON = args.json;
 
 // ---------------------------------------------------------------------------
@@ -121,7 +130,7 @@ function detectFamily(id: string): string {
 // Build test parameters using the extension's thinking provider strategy
 // ---------------------------------------------------------------------------
 
-import { THINKING_DEFAULTS } from "../src/config.js";
+import { ANONYMOUS_ZEN_MODEL_IDS, FALLBACK_USER_AGENT, THINKING_DEFAULTS } from "../src/config.js";
 
 const DEFAULT_SETTINGS: ThinkingSettings = { ...THINKING_DEFAULTS };
 
@@ -193,7 +202,7 @@ function buildThinkingTests(model: ModelInfo): ParamTest[] {
 // API call using extension's routing + auth
 // ---------------------------------------------------------------------------
 
-async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string): Promise<TestResult> {
+async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string | undefined): Promise<TestResult> {
   // Build the provider definition matching what the extension uses
   const provider =
     model.vendor === "go"
@@ -202,13 +211,15 @@ async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string):
           messagesUrl: `${GO_BASE}/messages`,
           responsesUrl: `${GO_BASE}/responses`,
           modelsUrl: `${GO_BASE}/models`,
+          googleModelsUrl: `${GO_BASE}/models`,
           vendor: "opencodego" as const,
         }
       : {
-          chatCompletionsUrl: `${ZEN_BASE}/chat/completions`,
-          messagesUrl: `${ZEN_BASE}/messages`,
-          responsesUrl: `${ZEN_BASE}/responses`,
-          modelsUrl: `${ZEN_BASE}/models`,
+          chatCompletionsUrl: `${ZEN_BASE}/openai/v1/chat/completions`,
+          messagesUrl: `${ZEN_BASE}/anthropic/v1/messages`,
+          responsesUrl: `${ZEN_BASE}/openai/v1/responses`,
+          modelsUrl: `${ZEN_BASE}/v1/models`,
+          googleModelsUrl: `${ZEN_BASE}/google/v1beta/models`,
           vendor: "opencodezen" as const,
         };
 
@@ -216,22 +227,46 @@ async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string):
   const routing = resolveModelRouting(model.id, provider);
 
   // Use extension's auth headers
-  const authHeaders = buildOpenCodeGatewayAuthHeaders(routing.endpointKind, apiKey);
+  const authHeaders = buildOpenCodeGatewayAuthHeaders(routing.endpointKind, apiKey, model.vendor === "go" ? "opencodego" : "opencodezen");
 
   // Build thinking payload using the extension's thinking provider strategy
   const thinking: ThinkingSettings = { ...DEFAULT_SETTINGS, ...test.settings };
-  const thinkingPayload = thinkingProviderFor(model.id).buildPayload(thinking, { hasImageInput: test.hasImageInput });
+  const thinkingPayload = thinkingProviderFor(model.id).buildPayload(thinking, {
+    hasImageInput: test.hasImageInput,
+    endpoint: routing.endpointKind === "messages" ? "messages" : routing.endpointKind === "responses" ? "responses" : "chat",
+  });
 
-  // Build the full request body exactly as the extension would
-  const body: Record<string, unknown> = {
-    model: model.id,
-    messages: [{ role: "user", content: "Say OK" }],
-    max_tokens: 10,
-    ...thinkingPayload,
-  };
+  const body: Record<string, unknown> =
+    routing.endpointKind === "google"
+      ? {
+          contents: [{ role: "user", parts: [{ text: "Say OK" }] }],
+          generationConfig: { maxOutputTokens: 10 },
+        }
+      : routing.endpointKind === "messages"
+        ? {
+            model: model.id,
+            messages: [{ role: "user", content: "Say OK" }],
+            max_tokens: 10,
+            stream: false,
+            ...thinkingPayload,
+          }
+        : routing.endpointKind === "responses"
+          ? {
+              model: model.id,
+              input: "Say OK",
+              max_output_tokens: 10,
+              stream: false,
+              ...thinkingPayload,
+            }
+          : {
+              model: model.id,
+              messages: [{ role: "user", content: "Say OK" }],
+              max_tokens: 10,
+              stream: false,
+              ...thinkingPayload,
+            };
 
-  // Add temperature unless model doesn't support it
-  if (test.name !== "no-temp" && model.temperature) {
+  if (routing.endpointKind !== "google" && test.name !== "no-temp" && model.temperature) {
     body.temperature = 0.2;
   }
 
@@ -241,7 +276,8 @@ async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string):
       controller.abort();
     }, TIMEOUT_MS);
 
-    const response = await fetch(routing.endpointUrl, {
+    const endpointUrl = routing.endpointKind === "google" ? `${routing.endpointUrl}:generateContent` : routing.endpointUrl;
+    const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
         ...authHeaders,
@@ -289,24 +325,54 @@ async function testParameter(model: ModelInfo, test: ParamTest, apiKey: string):
 }
 
 // ---------------------------------------------------------------------------
-// Model fetching from models.dev
+// Model discovery from models.dev plus the live Zen V2 catalog
 // ---------------------------------------------------------------------------
+
+type ZenModelInfo = {
+  status?: string;
+  reasoning?: boolean;
+  reasoning_options?: { type?: string; values?: string[] }[];
+  temperature?: boolean;
+};
 
 type ModelsDevResponse = Record<
   string,
   | {
-      models: Record<
-        string,
-        {
-          status?: string;
-          reasoning?: boolean;
-          reasoning_options?: { type?: string; values?: string[] }[];
-          temperature?: boolean;
-        }
-      >;
+      models: Record<string, ZenModelInfo>;
     }
   | undefined
 >;
+
+interface ZenCatalogResponse {
+  data?: { id?: string }[];
+}
+
+async function fetchZenCatalogIds(): Promise<string[] | undefined> {
+  const catalogUrl = `${ZEN_BASE.replace(/\/+$/, "")}/v1/models`;
+  try {
+    const response = await fetch(catalogUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": FALLBACK_USER_AGENT,
+        "x-opencode-client": "app",
+        "x-opencode-session": "validate-models",
+        ...(API_KEY && !ANONYMOUS ? { Authorization: `Bearer ${API_KEY}` } : {}),
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      console.error(`⚠️ Zen V2 catalog: HTTP ${String(response.status)}; falling back to models.dev.`);
+      return undefined;
+    }
+    const catalog = (await response.json()) as ZenCatalogResponse;
+    return Array.isArray(catalog.data)
+      ? catalog.data.map((entry) => entry.id).filter((id): id is string => typeof id === "string" && id.length > 0)
+      : undefined;
+  } catch (error) {
+    console.error(`⚠️ Zen V2 catalog unavailable (${String(error)}); falling back to models.dev.`);
+    return undefined;
+  }
+}
 
 async function fetchModels(): Promise<ModelInfo[]> {
   const response = await fetch(MODELS_DEV_URL);
@@ -333,11 +399,17 @@ async function fetchModels(): Promise<ModelInfo[]> {
   }
 
   const zenProvider = data["opencode"];
-  if (zenProvider?.models && (INCLUDE_ZEN_FREE || INCLUDE_ZEN_PAID)) {
-    const goModelIds = new Set(goProvider?.models ? Object.keys(goProvider.models) : []);
-    for (const [id, info] of Object.entries(zenProvider.models)) {
+  if (INCLUDE_ZEN_FREE || INCLUDE_ZEN_PAID) {
+    const goModelIds = new Set(INCLUDE_GO && goProvider?.models ? Object.keys(goProvider.models) : []);
+    const liveZenIds = await fetchZenCatalogIds();
+    const zenModels = zenProvider?.models ?? {};
+    const zenModelIds = liveZenIds ?? Object.keys(zenModels);
+    for (const id of zenModelIds) {
+      const info = zenModels[id] ?? {};
       if (SKIP_MODELS.has(id) || info.status === "deprecated") continue;
+      if (id === "test" || id === "test-novita-dsf4.1" || id.startsWith("jev-")) continue;
       if (MODELS_FILTER && !MODELS_FILTER.includes(id)) continue;
+      if (ANONYMOUS && !ANONYMOUS_ZEN_MODEL_IDS.has(id)) continue;
       const family = detectFamily(id);
       if (FAMILIES_FILTER && !FAMILIES_FILTER.includes(family)) continue;
       const isFree = id.endsWith("-free") || id === "big-pickle";
@@ -445,8 +517,10 @@ function formatReport(results: TestResult[], models: ModelInfo[]): string {
 async function main() {
   console.error("🔍 Model Parameter Validation Suite (using extension logic)\n");
 
-  if (!API_KEY && !DRY_RUN) {
-    console.error("❌ API key required for live testing. Use --api-key or set OPENCODE_API_KEY.");
+  if (!API_KEY && !DRY_RUN && (INCLUDE_GO || INCLUDE_ZEN_PAID || !ANONYMOUS)) {
+    console.error(
+      "❌ API key required for Go or paid Zen validation. Use --api-key, set OPENCODE_API_KEY, or pass --anonymous with --go=false --zen-free=true.",
+    );
     console.error("   Use --dry-run to see the test plan without an API key.");
     process.exit(1);
   }
@@ -462,11 +536,6 @@ async function main() {
 
   const results: TestResult[] = [];
   let testCount = 0;
-
-  if (!DRY_RUN && !API_KEY) {
-    console.error("❌ API key required for live testing. Use --api-key or set OPENCODE_API_KEY.");
-    process.exit(1);
-  }
 
   for (let i = 0; i < models.length; i++) {
     const model = models[i];
@@ -485,17 +554,15 @@ async function main() {
       continue;
     }
 
-    // DRY_RUN returned above, so API_KEY is guaranteed here (required by the
-    // guards at the top of main()). TS cannot correlate the `!DRY_RUN && !API_KEY`
-    // exit with the DRY_RUN `continue` above, so re-assert the invariant.
-    if (!API_KEY) {
-      throw new Error("API key required for live testing");
+    if (model.vendor === "go" && !API_KEY) {
+      throw new Error("API key required for OpenCode Go validation");
     }
+    const requestKey = ANONYMOUS ? undefined : API_KEY;
 
     let pass = 0;
     let fail = 0;
     for (const test of tests) {
-      const result = await testParameter(model, test, API_KEY);
+      const result = await testParameter(model, test, requestKey);
       results.push(result);
       testCount++;
       if (result.status === "✅") pass++;

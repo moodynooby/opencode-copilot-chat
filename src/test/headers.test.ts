@@ -10,7 +10,7 @@ fs.writeFileSync(
   vscodeMockPath,
   `"use strict";
 class LanguageModelChatToolMode { static Required = "required"; }
-module.exports = { LanguageModelChatToolMode, workspace: { workspaceFolders: undefined } };
+module.exports = { LanguageModelChatToolMode, workspace: { workspaceFolders: undefined }, extensions: { getExtension: () => undefined } };
 `,
   "utf-8",
 );
@@ -24,13 +24,31 @@ moduleResolver._resolveFilename = function (request: string, parent: unknown, ..
 };
 
 let hashRawCacheKey: typeof import("../request/headers.js").hashRawCacheKey;
+let buildOpenCodeRequestHeaders: typeof import("../request/headers.js").buildOpenCodeRequestHeaders;
+
+before(async () => {
+  const mod = await import("../request/headers.js");
+  hashRawCacheKey = mod.hashRawCacheKey;
+  buildOpenCodeRequestHeaders = mod.buildOpenCodeRequestHeaders;
+});
+
+describe("OpenCode application request identity", () => {
+  it("uses the official OpenCode app/session/project header shape", () => {
+    const headers = buildOpenCodeRequestHeaders(
+      [{ role: "user", content: "hello" }] as never,
+      { sessionId: "session-test", requestId: "request-test" } as never,
+      "test-model",
+    );
+
+    assert.equal(headers["x-opencode-client"], "app");
+    assert.equal(headers["x-opencode-session"], "session-test");
+    assert.equal(headers["x-opencode-request"], "request-test");
+    assert.match(headers["User-Agent"], /^opencode\//);
+    assert.match(headers["x-opencode-project"], /^[a-f0-9]{64}$/);
+  });
+});
 
 describe("hashRawCacheKey", () => {
-  before(async () => {
-    const mod = await import("../request/headers.js");
-    hashRawCacheKey = mod.hashRawCacheKey;
-  });
-
   it("pins SHA256 for a fixed raw key (regression guard)", () => {
     // Mirrors docs/references/opencode-context-cache-reference.md
     const raw = "testuser@testhost:C:/project";

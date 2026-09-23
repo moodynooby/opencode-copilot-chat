@@ -11,6 +11,7 @@ const goProvider: ProviderRoutingDefinition = {
   chatCompletionsUrl: "https://go.example/v1/chat/completions",
   messagesUrl: "https://go.example/v1/messages",
   modelsUrl: "https://go.example/v1/models",
+  googleModelsUrl: "https://go.example/v1/models",
   responsesUrl: "https://go.example/v1/responses",
 };
 const zenProvider: ProviderRoutingDefinition = {
@@ -18,6 +19,7 @@ const zenProvider: ProviderRoutingDefinition = {
   chatCompletionsUrl: "https://zen.example/v1/chat/completions",
   messagesUrl: "https://zen.example/v1/messages",
   modelsUrl: "https://zen.example/v1/models",
+  googleModelsUrl: "https://zen.example/google/v1beta/models",
   responsesUrl: "https://zen.example/v1/responses",
 };
 
@@ -51,9 +53,16 @@ describe("model registry — data-driven transport routing", () => {
     }
   });
 
+  it("routes remaining Qwen models to Messages on Zen without changing Go", () => {
+    for (const modelId of ["qwen3.7-plus", "qwen3.8-flash"]) {
+      assert.equal(resolveModelRouting(modelId, zenProvider).endpointKind, "messages", modelId);
+      assert.equal(resolveModelRouting(modelId, goProvider).endpointKind, "chat-completions", modelId);
+    }
+  });
+
   it("routes Gemini to the Google API on Zen but chat-completions on Go", () => {
     assert.equal(resolveModelRouting("gemini-3.5-flash", zenProvider).endpointKind, "google");
-    assert.equal(resolveModelRouting("gemini-3.5-flash", zenProvider).endpointUrl, `${zenProvider.modelsUrl}/gemini-3.5-flash`);
+    assert.equal(resolveModelRouting("gemini-3.5-flash", zenProvider).endpointUrl, `${zenProvider.googleModelsUrl}/gemini-3.5-flash`);
     assert.equal(resolveModelRouting("gemini-3.5-flash", goProvider).endpointKind, "chat-completions");
   });
 
@@ -73,7 +82,7 @@ describe("model registry — data-driven transport routing", () => {
   });
 
   it("defaults every other known family to chat-completions", () => {
-    for (const modelId of ["deepseek-v4-flash", "glm-5.1", "kimi-k2.6", "mimo-v2.5", "qwen3.8-max"]) {
+    for (const modelId of ["deepseek-v4-flash", "glm-5.1", "kimi-k2.6", "mimo-v2.5"]) {
       assert.equal(resolveModelRouting(modelId, goProvider).endpointKind, "chat-completions", modelId);
       assert.equal(resolveModelRouting(modelId, zenProvider).endpointKind, "chat-completions", modelId);
     }

@@ -7,7 +7,7 @@ import type * as vscode from "vscode";
 export interface StreamRequestOptions {
   url: string;
   providerDisplayName: string;
-  apiKey: string;
+  apiKey?: string;
   modelId: string;
   body: unknown;
   requestHeaders: Record<string, string>;

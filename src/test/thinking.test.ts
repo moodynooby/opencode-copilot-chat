@@ -210,7 +210,7 @@ describe("MimoThinking — payload + display (native reasoning model)", () => {
     assert.equal(provider.treatReasoningAsContent(goUrl, { ...defaultSettings, mimo: "off" }), false);
     assert.equal(provider.treatReasoningAsContent(goUrl, { ...defaultSettings, mimo: "high" }), false);
     assert.equal(
-      provider.treatReasoningAsContent("https://opencode.ai/zen/v1/chat/completions", { ...defaultSettings, mimo: "off" }),
+      provider.treatReasoningAsContent("https://opencode.ai/inference/openai/v1/chat/completions", { ...defaultSettings, mimo: "off" }),
       false,
     );
   });

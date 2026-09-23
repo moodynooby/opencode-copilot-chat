@@ -6,17 +6,17 @@
 
 ## 🎯 Ways to contribute (easy → hard)
 
-| Level           | What                       | How                                                                                                                  |
-| --------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| ⭐ **Easiest**  | Star the repo              | Click ⭐ top-right                                                                                                   |
-| 🐛 **Easy**     | Report a bug               | [Open an issue](https://github.com/ltmoerdani/opencode-copilot-chat/issues/new?template=bug_report.md)               |
-| 💡 **Easy**     | Suggest a feature or model | [Open a discussion](https://github.com/ltmoerdani/opencode-copilot-chat/discussions)                                 |
-| 📸 **Easy**     | Add a screenshot or GIF    | Drop in `docs/screenshots/`, open PR                                                                                 |
-| 📝 **Medium**   | Fix a typo / improve docs  | Edit README or `docs/`, open PR                                                                                      |
-| 🔧 **Medium**   | Fix a bug                  | Look for [`good first issue`](https://github.com/ltmoerdani/opencode-copilot-chat/labels/good%20first%20issue) label |
-| 🚀 **Advanced** | Add a new model or feature | [Start a discussion](https://github.com/ltmoerdani/opencode-copilot-chat/discussions) first, then PR                 |
+| Level           | What                       | How                                                                                                                    |
+| --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| ⭐ **Easiest**  | Star the repo              | Click ⭐ top-right                                                                                                     |
+| 🐛 **Easy**     | Report a bug               | [Open an issue](https://github.com/moodynooby/moodynooby-copilot-chat/issues/new?template=bug_report.md)               |
+| 💡 **Easy**     | Suggest a feature or model | [Open a discussion](https://github.com/moodynooby/moodynooby-copilot-chat/discussions)                                 |
+| 📸 **Easy**     | Add a screenshot or GIF    | Drop in `docs/screenshots/`, open PR                                                                                   |
+| 📝 **Medium**   | Fix a typo / improve docs  | Edit README or `docs/`, open PR                                                                                        |
+| 🔧 **Medium**   | Fix a bug                  | Look for [`good first issue`](https://github.com/moodynooby/moodynooby-copilot-chat/labels/good%20first%20issue) label |
+| 🚀 **Advanced** | Add a new model or feature | [Start a discussion](https://github.com/moodynooby/moodynooby-copilot-chat/discussions) first, then PR                 |
 
-> **New to open source?** Start with [`good first issue`](https://github.com/ltmoerdani/opencode-copilot-chat/labels/good%20first%20issue) — those are picked specifically for newcomers.
+> **New to open source?** Start with [`good first issue`](https://github.com/moodynooby/moodynooby-copilot-chat/labels/good%20first%20issue) — those are picked specifically for newcomers.
 
 ---
 
@@ -99,7 +99,7 @@ These rules exist to prevent accidental pushes to production branches.
 
 ## 💬 Questions?
 
-[Start a discussion](https://github.com/ltmoerdani/opencode-copilot-chat/discussions) — no question is too small!
+[Start a discussion](https://github.com/moodynooby/moodynooby-copilot-chat/discussions) — no question is too small!
 
 ---
 

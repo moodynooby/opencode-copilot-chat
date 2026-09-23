@@ -228,24 +228,25 @@ flowchart TD
 
 `src/core/registry.ts` — the single table that decides **transport** + **thinking family** for a model id. Adding a model family = adding ONE row (optionally + a thinking class). Evaluated **in table order, first match wins** (specific patterns before generic ones).
 
-| Family        | Pattern                                                   | endpointKind       | thinkingFamily | Vendor restriction                         |
-| ------------- | --------------------------------------------------------- | ------------------ | -------------- | ------------------------------------------ |
-| GPT           | `/^gpt-/i`                                                | `responses`        | `openai`       | any                                        |
-| Claude        | `/^claude-/i`                                             | `messages`         | `null`         | any                                        |
-| MiniMax m2.x  | `/^minimax-m2\./i`                                        | `messages`         | `minimax`      | `opencodego` only (Zen → chat-completions) |
-| Qwen Messages | `/^qwen3\.(?:5\|6)-plus(?:-free)?$/` · `/^qwen3\.7-max$/` | `messages`         | `qwen`         | any                                        |
-| Gemini        | `/^gemini-/i`                                             | `google`           | `null`         | `opencodezen` only                         |
-| MiniMax       | `/^minimax-/i`                                            | `chat-completions` | `minimax`      | any                                        |
-| DeepSeek      | `/^deepseek-/i`                                           | `chat-completions` | `deepseek`     | any                                        |
-| GLM           | `/^glm-/i`                                                | `chat-completions` | `glm`          | any                                        |
-| Kimi          | `/^kimi-/i`                                               | `chat-completions` | `kimi`         | any                                        |
-| MiMo          | `/^mimo-/i`                                               | `chat-completions` | `mimo`         | any                                        |
-| Qwen          | `/^qwen3(?:\.\|-)/i`                                      | `chat-completions` | `qwen`         | any                                        |
-| **default**   | `/.*/`                                                    | `chat-completions` | `null`         | any (catch-all)                            |
+| Family                 | Pattern                                                   | endpointKind       | thinkingFamily | Vendor restriction                         |
+| ---------------------- | --------------------------------------------------------- | ------------------ | -------------- | ------------------------------------------ |
+| GPT                    | `/^gpt-/i`                                                | `responses`        | `openai`       | any                                        |
+| Claude                 | `/^claude-/i`                                             | `messages`         | `null`         | any                                        |
+| MiniMax m2.x           | `/^minimax-m2\./i`                                        | `messages`         | `minimax`      | `opencodego` only (Zen → chat-completions) |
+| Qwen Messages (legacy) | `/^qwen3\.(?:5\|6)-plus(?:-free)?$/` · `/^qwen3\.7-max$/` | `messages`         | `qwen`         | any                                        |
+| Qwen Messages (V2)     | `/^qwen3\./i`                                             | `messages`         | `qwen`         | `opencodezen` only                         |
+| Gemini                 | `/^gemini-/i`                                             | `google`           | `null`         | `opencodezen` only                         |
+| MiniMax                | `/^minimax-/i`                                            | `chat-completions` | `minimax`      | any                                        |
+| DeepSeek               | `/^deepseek-/i`                                           | `chat-completions` | `deepseek`     | any                                        |
+| GLM                    | `/^glm-/i`                                                | `chat-completions` | `glm`          | any                                        |
+| Kimi                   | `/^kimi-/i`                                               | `chat-completions` | `kimi`         | any                                        |
+| MiMo                   | `/^mimo-/i`                                               | `chat-completions` | `mimo`         | any                                        |
+| Qwen (Go fallback)     | `/^qwen3(?:\.\|-)/i`                                      | `chat-completions` | `qwen`         | any (Go fallback)                          |
+| **default**            | `/.*/`                                                    | `chat-completions` | `null`         | any (catch-all)                            |
 
 > **Scope note:** context limits / capabilities / cost are **NOT** in this table — they stay metadata-driven (live models.dev via `src/models/metadata.ts`). Do not duplicate them into a static table.
 
-**Endpoint URL resolution** (`resolveModelRouting`): agent-host variants resolve to their base vendor first; `responses` → `provider.responsesUrl`, `messages` → `provider.messagesUrl`, `google` → `${provider.modelsUrl}/${modelId}`, default → `provider.chatCompletionsUrl`.
+**Endpoint URL resolution** (`resolveModelRouting`): agent-host variants resolve to their base vendor first; `responses` → `provider.responsesUrl`, `messages` → `provider.messagesUrl`, `google` → `${provider.googleModelsUrl}/${modelId}`, default → `provider.chatCompletionsUrl`.
 
 ---
 
@@ -271,9 +272,9 @@ flowchart LR
 
 ### 5.2 Model Discovery (`provideLanguageModelChatInformation`)
 
-1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback.
+1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback. A missing Zen key is valid for the verified anonymous model set.
 2. Persist key to SecretStorage (non-agent variants) so agent variants inherit it.
-3. `fetchModels()` — live GET `modelsUrl` with retry/backoff/timeout (issue #78) → `filterAvailableModels()` (drops `KNOWN_UNAVAILABLE_MODEL_IDS`, deprecated Zen models cross-checked against gateway response (issue #182), `freeOnly` filter).
+3. `fetchModels()` — live GET `modelsUrl` with retry/backoff/timeout (Zen V2 uses `/inference/v1/models`; Go remains `/zen/go/v1/models`) → `filterAvailableModels()` (drops unsupported catalog entries, `KNOWN_UNAVAILABLE_MODEL_IDS`, deprecated Zen models cross-checked against gateway response (issue #182), `freeOnly`, and credential-aware paid-model filtering).
 4. Per model: `resolveModelMetadata()` → `resolveModelRouting()` → `modelLimits()` → `modelCapabilities()` → `modelConfigurationSchema()` (thinking submenu + context-size tier) → build `OpenCodeModel` (general variant or `::agent-host` variant with `targetChatSessionType: "copilotcli"`).
 
 ### 5.3 Chat Request (`provideLanguageModelChatResponse`)
@@ -375,7 +376,7 @@ Reuse these before writing new logic (all under `src/` root unless noted):
 ### Security
 
 - **API keys only** via BYOK `options.configuration.apiKey` → SecretStorage mirror (`opencodego.apiKey` / `opencodezen.apiKey`). Never logged, never hardcoded, never in error messages.
-- Keys only ever sent as an auth header (`Authorization` / `x-api-key` / `x-goog-api-key`).
+- Keys only ever sent as an auth header (Zen V2 and Go chat/responses: `Authorization`; Go messages: `x-api-key`; Go Google: `x-goog-api-key`). Anonymous Zen requests send no key header.
 - `reasoningContentByToolCallId` capped at 500 (per-call reasoning echo).
 
 ### Resilience
@@ -471,11 +472,11 @@ On push/PR to `main`/`develop`, Node 20: `npm ci` → `compile` → `lint` (with
 
 ## 9. Version & Contribution Surface
 
-- **Version:** `0.6.0` · **Engine:** `vscode ^1.125.0` · **Entry:** `./out/extension.js`
+- **Version:** `0.7.6` · **Engine:** `vscode ^1.125.0` · **Entry:** `./out/extension.js`
 - **Activation:** `onStartupFinished`, `onLanguageModelChatProvider:opencodego`, `onLanguageModelChatProvider:opencodezen`
 - **Contribution points:** `commands` (16), `configuration` (35+ keys), `languageModelChatProviders` (4 vendors: `opencodego`, `opencodezen`, `opencodego-agent`, `opencodezen-agent`)
 - **4 providers:** Go (paid) + Zen (free default) + agent-host variants mirroring each base vendor
-- **Endpoints:** `https://opencode.ai/zen/{go/,}v1/{models,chat/completions,messages,responses}` + `https://opencode.ai/zen/go/v1/usage` (server meters) + `https://models.dev/api.json` (metadata)
+- **Endpoints:** Go `https://opencode.ai/zen/go/v1/{models,chat/completions,messages,responses}`; Zen V2 `https://opencode.ai/inference/{v1/models,openai/v1/chat/completions,openai/v1/responses,anthropic/v1/messages,google/v1beta/models}`; Go usage `https://opencode.ai/zen/go/v1/usage`; metadata `https://models.dev/api.json`
 
 ---
 
@@ -483,6 +484,7 @@ On push/PR to `main`/`develop`, Node 20: `npm ci` → `compile` → `lint` (with
 
 - `docs/architecture/01-20260514-open-code-provider-architecture.md` — provider/BYOK/usage history
 - `docs/architecture/02-20260809-provider-adapter-architecture.md` — adapter architecture + migration plan
+- `docs/architecture/03-20260923-opencode-v2-zen-inference.md` — V2 Zen inference contract and migration
 - `docs/features/16-20260813-usage-dashboard-realtime.md` — usage dashboard living reference
 - `docs/features/17-20260814-data-driven-model-registry.md` — data-driven registry (user-maintained)
 - `docs/issues/67-20260814-pr155-split-god-files-review-merge.md` — god-file split PR review (user-maintained)

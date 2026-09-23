@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
-import { TEST_CONNECTION_TIMEOUT_MS, secretKeyFor } from "../config";
+import { OPEN_CODE_CLIENT, TEST_CONNECTION_TIMEOUT_MS, secretKeyFor } from "../config";
+import { getUserAgent } from "./definitions";
 import { getErrorMessage } from "../utils";
 import { auxiliarySessionId } from "../request/headers";
-import type { ProviderVendor } from "../providerTypes";
+import { GO_VENDOR, type ProviderVendor } from "../providerTypes";
 import type { ProviderDefinition } from "./definitions";
 import { configureUtilityModels, toggleProviderEnabled } from "../commands/providers";
 
@@ -66,8 +67,9 @@ export async function manageProvider(deps: DialogDeps): Promise<void> {
 
 /** Fire a minimal chat completion at the configured endpoint and report the result. */
 export async function testConnection(deps: DialogDeps): Promise<void> {
-  const apiKey = await deps.context.secrets.get(secretKeyFor(deps.baseVendor));
-  if (!apiKey) {
+  const storedApiKey = await deps.context.secrets.get(secretKeyFor(deps.baseVendor));
+  const apiKey = storedApiKey?.trim() || undefined;
+  if (!apiKey && deps.baseVendor === GO_VENDOR) {
     vscode.window.showErrorMessage(
       `${deps.definition.displayName}: No API key configured. Add the provider via Manage Language Models ("+ Add Models" → ${deps.definition.displayName}) first.`,
     );
@@ -81,10 +83,12 @@ export async function testConnection(deps: DialogDeps): Promise<void> {
     const response = await fetch(deps.definition.chatCompletionsUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "User-Agent": getUserAgent(),
+        "x-opencode-client": OPEN_CODE_CLIENT,
         // Gateway enforcement (docs/go): auxiliary requests need a session id.
         "x-opencode-session": auxiliarySessionId(deps.context),
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
         model: deps.definition.testModelId,

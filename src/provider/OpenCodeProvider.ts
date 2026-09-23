@@ -16,7 +16,7 @@ import { streamChatCompletions as runStreamChatCompletions } from "../transports
 import { streamGoogleGenerateContent as runStreamGoogleGenerateContent } from "../transports/google";
 import { streamResponsesApi as runStreamResponsesApi } from "../transports/responses";
 
-import { resolveBaseVendor, type ProviderVendor } from "../providerTypes";
+import { GO_VENDOR, resolveBaseVendor, type ProviderVendor } from "../providerTypes";
 
 import { ModelListEntry, OpenCodeModel, ProviderDefinition } from "./definitions";
 import {
@@ -149,11 +149,11 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
   private async refreshMetadataAndModels(): Promise<void> {
     await clearOpenCodeModelMetadataCache(this.context);
     // Bypass the cache-first short-circuit so "Refresh Models" always
-    // performs a real upstream fetch (issue #222).
-    this.fetcher.invalidate();
-    // Pass the stored API key so the gateway sees the authenticated
-    // (per-key) model list, not the anonymous default.
+    // performs a real upstream fetch (issue #222). Pass the stored API key so
+    // the gateway sees the authenticated (per-key) model list, not the
+    // anonymous default.
     const apiKey = await this.context.secrets.get(secretKeyFor(this.baseVendor));
+    this.fetcher.invalidate(apiKey);
     await this.fetchModels(apiKey);
   }
 
@@ -164,9 +164,8 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
    * - Skips the Manage Provider QuickPick and goes straight to a fetch.
    * - Reuses {@link refreshMetadataAndModels}, fires the change emitter so
    *   VS Code re-resolves the picker, and surfaces an informational toast.
-   * - On missing API key, points the user at the BYOK flow instead of
-   *   prompting for a key (API keys are configured via Manage Language
-   *   Models / "+ Add Models" only).
+   * - Requires a key for OpenCode Go; Zen refreshes anonymously when no key is
+   *   configured and still supports paid models after a key is added.
    *
    * Background: this was added after issue #78 revealed that "Refresh Models"
    * was only reachable as a sub-item inside `OpenCode Go: Manage Provider`
@@ -174,8 +173,9 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
    * what users naturally type in the Command Palette.
    */
   async refreshModels(): Promise<void> {
-    const apiKey = await this.context.secrets.get(secretKeyFor(this.baseVendor));
-    if (!apiKey) {
+    const storedApiKey = await this.context.secrets.get(secretKeyFor(this.baseVendor));
+    const apiKey = storedApiKey?.trim() || undefined;
+    if (!apiKey && this.baseVendor === GO_VENDOR) {
       vscode.window.showErrorMessage(
         `${this.definition.displayName}: No API key configured. Add the provider via Manage Language Models ("+ Add Models" → ${this.definition.displayName}) first.`,
       );
@@ -357,7 +357,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           requestTimeoutMs: settings.requestTimeoutMs,
           streamIdleTimeoutMs: settings.streamIdleTimeoutMs,
           contextWindowOutputBuffer,
-          authHeaders: buildOpenCodeGatewayAuthHeaders("messages", apiKey),
+          authHeaders: buildOpenCodeGatewayAuthHeaders("messages", apiKey, this.baseVendor),
           capacityLimitedModelNotes: CAPACITY_LIMITED_MODEL_NOTES,
           onTransportSummary,
           stripThinkTags: settings.stripThinkTags,
@@ -373,7 +373,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           apiKey,
           modelId: rawModelId,
           body: buildResponsesRequestBody(rawModelId, apiMessages, options, settings, metadata, limits),
-          authHeaders: buildOpenCodeGatewayAuthHeaders("responses", apiKey),
+          authHeaders: buildOpenCodeGatewayAuthHeaders("responses", apiKey, this.baseVendor),
           requestHeaders,
           progress,
           token,
@@ -410,7 +410,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           requestTimeoutMs: settings.requestTimeoutMs,
           streamIdleTimeoutMs: settings.streamIdleTimeoutMs,
           contextWindowOutputBuffer,
-          authHeaders: buildOpenCodeGatewayAuthHeaders("google", apiKey),
+          authHeaders: buildOpenCodeGatewayAuthHeaders("google", apiKey, this.baseVendor),
           capacityLimitedModelNotes: CAPACITY_LIMITED_MODEL_NOTES,
           onTransportSummary,
           stripThinkTags: settings.stripThinkTags,
@@ -429,7 +429,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
         apiKey,
         modelId: rawModelId,
         body: buildChatCompletionsRequestBody(rawModelId, apiMessages, options, settings, metadata, limits),
-        authHeaders: buildOpenCodeGatewayAuthHeaders("chat-completions", apiKey),
+        authHeaders: buildOpenCodeGatewayAuthHeaders("chat-completions", apiKey, this.baseVendor),
         requestHeaders,
         progress,
         token,
@@ -499,7 +499,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
         replaceLiveModelMetadata: (models) => {
           this.replaceLiveModelMetadata(models);
         },
-        filterAvailableModels: (ids, liveIds) => this.filterAvailableModels(ids, liveIds),
+        filterAvailableModels: (ids, liveIds, apiKey) => this.filterAvailableModels(ids, liveIds, apiKey),
       });
     }
     return this.modelListFetcher;
@@ -509,7 +509,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
     return this.fetcher.fetch(apiKey, token);
   }
 
-  private async filterAvailableModels(modelIds: string[], liveModelIds?: ReadonlySet<string>): Promise<string[]> {
+  private async filterAvailableModels(modelIds: string[], liveModelIds?: ReadonlySet<string>, apiKey?: string): Promise<string[]> {
     const uniqueModelIds = [...new Set(modelIds)];
 
     try {
@@ -518,7 +518,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
         (modelId) =>
           !KNOWN_UNAVAILABLE_MODEL_IDS.has(modelId) &&
           !shouldHideDeprecatedModel(modelId, this.baseVendor, metadataSnapshot, liveModelIds) &&
-          (this.definition.filterModel?.(modelId) ?? true),
+          (this.definition.filterModel?.(modelId, apiKey) ?? true),
       );
 
       const removedModelIds = uniqueModelIds.filter((modelId) => !filteredModelIds.includes(modelId));
@@ -531,7 +531,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
       const message = getErrorMessage(error);
       this.log(`Could not fetch model status metadata from models.dev. Applying local unavailable model filter only. ${message}`);
       return uniqueModelIds.filter(
-        (modelId) => !KNOWN_UNAVAILABLE_MODEL_IDS.has(modelId) && (this.definition.filterModel?.(modelId) ?? true),
+        (modelId) => !KNOWN_UNAVAILABLE_MODEL_IDS.has(modelId) && (this.definition.filterModel?.(modelId, apiKey) ?? true),
       );
     }
   }

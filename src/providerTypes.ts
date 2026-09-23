@@ -18,6 +18,9 @@ export interface ProviderRoutingDefinition {
   vendor: AllProviderVendor;
   chatCompletionsUrl: string;
   messagesUrl: string;
+  /** Model-catalog endpoint, not necessarily the Google model base URL. */
   modelsUrl: string;
+  /** Google Generative AI model base URL, including the provider prefix. */
+  googleModelsUrl: string;
   responsesUrl?: string;
 }

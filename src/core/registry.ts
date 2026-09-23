@@ -70,6 +70,16 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     sdkPackage: "@ai-sdk/anthropic",
     thinkingFamily: "qwen",
   },
+  // The V2 Console serves the remaining Qwen models through Anthropic Messages.
+  // Restrict this broad match to Zen so OpenCode Go retains its existing routing.
+  {
+    family: "qwen-zen-messages",
+    patterns: [/^qwen3\./i],
+    endpointKind: "messages",
+    sdkPackage: "@ai-sdk/anthropic",
+    thinkingFamily: "qwen",
+    vendors: ["opencodezen"],
+  },
   // Gemini family served by Zen → Google Generative Language API.
   {
     family: "gemini",

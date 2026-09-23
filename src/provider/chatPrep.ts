@@ -41,7 +41,7 @@ import {
   updateUsageStatusBar,
 } from "../usage/dashboard";
 import { GO_VENDOR, type ProviderVendor } from "../providerTypes";
-import type { OpenCodeModel, ProviderDefinition } from "./definitions";
+import { isAnonymousZenModel, type OpenCodeModel, type ProviderDefinition } from "./definitions";
 import type { TransportSummaryLog } from "./transportLog";
 
 /**
@@ -69,7 +69,7 @@ export async function prepareChatRequest(
   options: vscode.ProvideLanguageModelChatResponseOptions,
   token: vscode.CancellationToken,
 ): Promise<{
-  apiKey: string;
+  apiKey?: string;
   rawModelId: string;
   apiMessages: ReturnType<typeof normalizeMessages>;
   settings: ApiSettings;
@@ -83,6 +83,8 @@ export async function prepareChatRequest(
   requestHeaders: Record<string, string>;
   onTransportSummary: (summary: TransportRequestSummary) => void;
 }> {
+  const rawModelId = model.rawModelId ?? resolveRawModelId(model.id);
+
   // VS Code can invoke a cached selected model immediately after the
   // extension host restarts, before model discovery repopulates the in-memory
   // ID map. Keep SecretStorage as the cold-start fallback for that request.
@@ -92,13 +94,11 @@ export async function prepareChatRequest(
     await deps.context.secrets.get(secretKeyFor(deps.baseVendor)),
   );
 
-  if (!apiKey) {
+  if (!apiKey && (deps.baseVendor === GO_VENDOR || !isAnonymousZenModel(rawModelId))) {
     throw new Error(
-      `${deps.definition.displayName} API key is required. Use the ${deps.definition.displayName} gear icon in Language Models to configure it, then reload the window.`,
+      `${deps.definition.displayName} API key is required for this model. Use the ${deps.definition.displayName} gear icon in Language Models to configure it, then reload the window.`,
     );
   }
-
-  const rawModelId = model.rawModelId ?? resolveRawModelId(model.id);
   const convertedMessages = await Promise.all(
     messages.map((message) => convertMessage(message, deps.reasoningContentByToolCallId, rawModelId)),
   );
@@ -320,7 +320,7 @@ export async function prepareChatRequest(
 
     deps.transportLog.record(summary, routing.endpointKind, metadata.source, options.requestInitiator);
     updateUsageStatusBar(deps.definition.displayName, rawModelId, summary);
-    if (deps.baseVendor === GO_VENDOR) {
+    if (deps.baseVendor === GO_VENDOR && apiKey) {
       const tracker = ensureProfileForApiKey(apiKey);
       deps.log(
         `[go-usage] Recording profile=${activeProfileFingerprint}: model=${summary.modelId} promptTokens=${prompt} completionTokens=${completion} cachedTokens=${cached}`,

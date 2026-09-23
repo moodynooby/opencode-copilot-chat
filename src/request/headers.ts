@@ -134,6 +134,9 @@ export function buildOpenCodeRequestHeaders(
     "User-Agent": getUserAgent(),
   };
   if (projectCacheKey) {
+    // Official OpenCode requests include a stable project identifier for
+    // provider-side routing and cache affinity.
+    headers["x-opencode-project"] = projectCacheKey;
     appendContextCacheLog(`model=${modelId} raw=${resolveRawProjectCacheKey(modelId) ?? ""} hash=${projectCacheKey}`);
   } else {
     appendContextCacheLog(`model=${modelId} no stable cache key resolved`);

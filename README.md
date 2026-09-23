@@ -6,13 +6,13 @@
 
 **Bring Your Own Key (BYOK)** · OpenCode Zen (free + paid models) or Go ($10/mo subscription) · Works with native Copilot Agent Mode
 
-[![CI](https://github.com/ltmoerdani/opencode-copilot-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/ltmoerdani/opencode-copilot-chat/actions/workflows/ci.yml)
-[![VS Code Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-007ACC?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=ltmoerdani.opencode-copilot-chat)
-[![Version](https://img.shields.io/github/v/release/ltmoerdani/opencode-copilot-chat?label=Version&color=6c47ff)](https://github.com/ltmoerdani/opencode-copilot-chat/releases)
+[![CI](https://github.com/moodynooby/moodynooby-copilot-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/moodynooby/moodynooby-copilot-chat/actions/workflows/ci.yml)
+[![VS Code Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-007ACC?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=moodynooby.opencode-copilot-chat)
+[![Version](https://img.shields.io/github/v/release/moodynooby/moodynooby-copilot-chat?label=Version&color=6c47ff)](https://github.com/moodynooby/moodynooby-copilot-chat/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.125%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](./CONTRIBUTING.md)
-[![Stars](https://img.shields.io/github/stars/ltmoerdani/opencode-copilot-chat?style=social)](https://github.com/ltmoerdani/opencode-copilot-chat)
+[![Stars](https://img.shields.io/github/stars/moodynooby/moodynooby-copilot-chat?style=social)](https://github.com/moodynooby/moodynooby-copilot-chat)
 
 [**✨ Why you'll love it**](#-why-youll-love-it) · [**⚡ Quick Start (60 sec)**](#-quick-start-60-sec) · [**🧠 Models**](#-models) · [**📊 Compare**](#-github-copilot-vs-this-extension) · [**🔧 Settings**](#-settings) · [**❓ FAQ**](#-faq) · [**💬 Community**](#-community)
 
@@ -42,18 +42,17 @@
 | 🎯 **Smart routing**             | Each model family auto-routes to its native transport (`/responses`, `/messages`, `streamGenerateContent`, `/chat/completions`)                                                                                                                       |
 | 🖼️ **Vision + PDF + Audio**      | Multimodal models pass through image, PDF, audio, and video inputs. Oversized images auto-resize to 2000×2000 / 5MB to match the gateway contract.                                                                                                    |
 | 📐 **Context-size picker**       | Kimi K3 and other tiered-context models expose `256K` vs full-window selection in the per-model configuration, with the cheaper tier selected by default.                                                                                             |
-| 🔒 **Your key, your control**    | API key entered once in Language Models → **Add Models…**; stored by VS Code, never leaves your machine                                                                                                                                               |
+| 🔒 **Your key, your control**    | The verified anonymous Zen model needs no key; optional Console and Go keys are stored by VS Code and never leave your machine                                                                                                                        |
 
 ---
 
 ## ⚡ Quick Start (60 sec)
 
 ```text
-1.  Install or update VS Code 1.125+ ────────────────────────────── ✓
-2.  Install this extension ──────────────────────────────────────── ✓
-3.  Get an OpenCode Zen API key → opencode.ai/auth ─────────────── ✓
-4.  Open Copilot Chat → click model → "Add Models" → OpenCode Zen ── ✓
-5.  Paste API key → pick a free model → CHAT 🎉
+1. Install or update VS Code 1.125+ ───────────────────────────── ✓
+2. Install this extension ──────────────────────────────────────── ✓
+3. Open Copilot Chat → pick a free OpenCode Zen model ─────────── ✓
+4. Add a Console service-account key only for paid Zen models ──── ✓
 ```
 
 <details>
@@ -61,15 +60,15 @@
 
 1. **Install or update [VS Code](https://code.visualstudio.com/)** to version 1.125 or newer. OpenCode BYOK chat works without a GitHub sign-in or Copilot plan.
 2. **Install this extension** from the VS Code Marketplace (or press `F5` in this repo for dev mode).
-3. **Get an API key:**
-   - **Free models:** Sign up at [opencode.ai](https://opencode.ai) → grab an **OpenCode Zen** key. Several models are truly free (Big Pickle, DeepSeek V4 Flash Free, MiMo-V2.5 Free, and others rotate).
-   - **Paid Zen models (optional):** Add a payment method to your Zen account to unlock Claude Opus, GPT-5.5, Gemini, and other paid models at pay-as-you-go rates. Adding $20+ balance also improves rate limits on free models.
+3. **Choose access:**
+   - **Free Zen models:** No API key is required. The extension discovers the current catalog dynamically from the OpenCode V2 inference API.
+   - **Paid Zen models (optional):** Create a service-account key in the [OpenCode Console](https://opencode.ai/console). Add credits to use Claude, GPT, Gemini, and other paid models.
    - **OpenCode Go (optional):** Subscribe to **OpenCode Go** ($10/mo, $5 first month promo) for curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro.
 4. **Open Copilot Chat** (Cmd/Ctrl+Shift+I, or click the Copilot icon).
 5. **Click the model picker** (current model name) → **Add Models…**
 6. **Select** **OpenCode Go** or **OpenCode Zen**.
 7. **Press Enter** to accept the default group name.
-8. **Paste your API key** when prompted (stored by VS Code in your language-models configuration).
+8. **Paste a service-account key** when you want paid Zen or Go access (stored by VS Code in its encrypted language-models configuration). Free Zen models work without this step.
 9. **Pick the models** you want enabled.
 10. **Select any OpenCode model** from the picker and start chatting. 🚀
 
@@ -95,12 +94,12 @@ _Selecting an OpenCode model from the Copilot Chat model picker._
 
 ## 🧠 Models
 
-The extension fetches **live model lists** on every startup from:
+The extension refreshes **live model lists** periodically and on demand from:
 
-| Provider         | Endpoint                               | Cost                                                                         |
-| ---------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
-| **OpenCode Go**  | `https://opencode.ai/zen/go/v1/models` | $10/mo ($5 first month promo); usage limits: 5h/$12, weekly/$30, monthly/$60 |
-| **OpenCode Zen** | `https://opencode.ai/zen/v1/models`    | rotating free models + pay-as-you-go for premium models                      |
+| Provider         | Endpoint                                  | Cost                                                                         |
+| ---------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| **OpenCode Go**  | `https://opencode.ai/zen/go/v1/models`    | $10/mo ($5 first month promo); usage limits: 5h/$12, weekly/$30, monthly/$60 |
+| **OpenCode Zen** | `https://opencode.ai/inference/v1/models` | live rotating free models + pay-as-you-go premium models                     |
 
 ### ⭐ OpenCode Go ($10/mo subscription, $5 first month promo)
 
@@ -130,22 +129,11 @@ Curated open coding models, refreshed live from the endpoint. Deprecated/legacy 
 
 > **Usage:** most Go models include **$60/mo** of included usage; premium models include less (`glm-5.3`, `glm-5.3-flash`, `gpt-5.6-luna`, `grok-4.6`, `kimi-k3`, `qwen3.8-max`, `deepseek-v4-pro`, `deepseek-v4-flash-vision-exp`, `mimo-v2.5-pro` at $15/mo; `qwen3.8-flash`, `qwen3.7-max`, `deepseek-v4-flash`, `hy4-preview` at $30/mo), and `omen-alpha` includes a larger **$100/mo**. Cheaper per-token models stretch their allowance further, so request counts vary widely: the docs estimate ~226K requests/mo on Muse Spark 1.3 vs ~490 on Kimi K3. If you hit a limit, keep using the free Zen models (or enable the "Use balance" option in the Zen console).
 
-### 🆓 OpenCode Zen free models (no payment needed)
+### 🆓 OpenCode Zen free models (live catalog)
 
-OpenCode Zen offers **rotating free models**, no balance required. Currently free: **Big Pickle** (stealth model), DeepSeek V4 Flash Free, MiMo-V2.5 Free, Hy3 Free, Laguna S 2.1 Free, Ling-3.0-tiny Free, Nemotron 3 Ultra Free, and Nemotron 3.5 Lightning Free. Without a balance, rate limits are low. Adding $20+ to your Zen balance significantly improves rate limits on free models.
+OpenCode Zen exposes a rotating set of free conversational models through the V2 inference catalog. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. `space-bunny-free` is currently verified for anonymous Chat Completions access. Other free catalog entries such as `big-pickle`, MiMo, Ling, and Nemotron variants require a Console service-account key under the current free-tier policy, as do free models routed through Responses, Google, or Anthropic.
 
-> **Note:** Per the OpenCode docs, free models are all offered **for a limited time** and rotate periodically. The table shows current offerings; availability may change.
-
-| Model                         |   Context | Max Output | Vendor     |
-| ----------------------------- | --------: | ---------: | ---------- |
-| `big-pickle`                  |   200,000 |     32,000 | 🥒 Stealth |
-| `deepseek-v4-flash-free`      |   200,000 |    128,000 | DeepSeek   |
-| `mimo-v2.5-free`              |   200,000 |     32,000 | Xiaomi     |
-| `hy3-free`                    |   190,000 |     64,000 | OpenCode   |
-| `laguna-s-2.1-free`           |   256,000 |     32,000 | OpenCode   |
-| `ling-3.0-tiny-free`          |   262,144 |     32,768 | OpenCode   |
-| `nemotron-3-ultra-free`       | 1,000,000 |    128,000 | NVIDIA     |
-| `nemotron-3.5-lightning-free` |   262,144 |    262,144 | NVIDIA     |
+> Free models can change without notice and may have stricter anonymous rate limits. Configure a Console service-account key when you need paid models, other free models, or workspace-aware access.
 
 ### 💰 OpenCode Zen paid models (requires balance)
 
@@ -185,7 +173,7 @@ Add a payment method to your Zen account to unlock these models at pay-as-you-go
 Limits and capabilities resolve in this priority order:
 
 1. **Live metadata** from OpenCode `/models` endpoint
-2. **6-hour models.dev snapshot** cached in VS Code `globalState`
+2. **One-hour models.dev snapshot** cached in VS Code `globalState`
 3. **Bundled fallback catalog** shipped with the extension (works offline)
 
 Deprecated/unavailable models are filtered before registration. Per-provider limits tracked separately (Go vs Zen) so shared models (e.g. `glm-5.1`, `qwen3.6-plus`) use correct values for each.
@@ -200,9 +188,11 @@ Deprecated/unavailable models are filtered before registration. Per-provider lim
 | Zen GPT (`gpt-*`)                                     | `/responses`                     | OpenAI native        |
 | Zen Gemini (`gemini-*`)                               | `:streamGenerateContent?alt=sse` | Google native        |
 | Zen Claude (`claude-*`) + Go MiniMax (`minimax-m2.*`) | `/messages`                      | Anthropic-compatible |
-| Everything else (Qwen, DeepSeek, GLM, Kimi, MiMo…)    | `/chat/completions`              | OpenAI-compatible    |
+| Zen Qwen (`qwen3.*`)                                  | `/messages`                      | Console V2 routing   |
+| Go Qwen 3.5/3.6 Plus and Qwen 3.7 Max                 | `/messages`                      | Anthropic-compatible |
+| All other models                                      | `/chat/completions`              | OpenAI-compatible    |
 
-All Qwen models use `/chat/completions` because they use OpenAI-native tool-calling format. Routing to Anthropic `/messages` broke tool calls.
+Qwen routing is vendor-specific: Zen uses the V2 Console Messages route, while OpenCode Go retains its existing Messages exceptions and sends the remaining Qwen models through Chat Completions.
 
 </details>
 
@@ -390,7 +380,7 @@ Provider diagnostics also include the VS Code/extension versions, extension host
 | Setting                                   | Default                         | Description                                                                                                            |
 | ----------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `opencodego.apiBaseUrl`                   | `https://opencode.ai/zen/go/v1` | Base URL for a Go-compatible gateway; the extension appends the required API routes. Reload after changing.            |
-| `opencodezen.apiBaseUrl`                  | `https://opencode.ai/zen/v1`    | Base URL for a Zen-compatible gateway; the extension appends the required API routes. Reload after changing.           |
+| `opencodezen.apiBaseUrl`                  | `https://opencode.ai/inference` | Base URL for the OpenCode Zen V2 inference API; catalog and family routes are derived from it. Reload after changing.  |
 | `opencodego.temperature`                  | `0.2`                           | Sampling temperature (`0`–`2`)                                                                                         |
 | `opencodego.maxTokens`                    | `0`                             | Max output token override (`0` = per-model max)                                                                        |
 | `opencodego.maxInputTokens`               | `0`                             | Context window override (`0` = per-model default)                                                                      |
@@ -463,7 +453,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Is it really free? What's the catch?</b></summary>
 
-**OpenCode Zen** offers **rotating free models**, no balance required. Currently free: Big Pickle, DeepSeek V4 Flash Free, MiMo-V2.5 Free, Hy3 Free, Laguna S 2.1 Free, Ling-3.0-tiny Free, Nemotron 3 Ultra Free, Nemotron 3.5 Lightning Free (all limited-time, per the OpenCode docs). Without a balance, rate limits are low. Adding $20+ to your Zen balance significantly improves rate limits on free models. Paid Zen models (Claude Opus, GPT-5.6, Gemini, etc.) require adding a payment method; they're pay-as-you-go.
+**OpenCode Zen** offers a dynamic set of rotating free conversational models. `space-bunny-free` is currently verified for anonymous Chat Completions access; other free models and all paid Zen models require a Console service-account key (paid models also require credits). Anonymous access can be rate-limited.
 
 **OpenCode Go** is a **subscription**: **$10/mo** ($5 first month promo) with generous usage limits (5h/$12, weekly/$30, monthly/$60). It unlocks curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro. When you hit the limit, you can continue using the free Zen models.
 
@@ -481,7 +471,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Where is my API key stored?</b></summary>
 
-In your VS Code **language-models configuration**: add it via **Chat: Manage Language Models → Add Models… → OpenCode Go / OpenCode Zen**. VS Code stores the key in its encrypted language-models storage, it never leaves your machine, and it is only sent to `opencode.ai`.
+Paid Zen and Go keys are stored in your VS Code **language-models configuration** and sent only to `opencode.ai`. Free Zen requests do not require a key.
 
 </details>
 
@@ -497,7 +487,7 @@ In your VS Code **language-models configuration**: add it via **Chat: Manage Lan
 
 Not safely through the VS Code language-model provider contract yet. `opencode serve` exposes OpenCode sessions and agents, whose tools execute inside OpenCode, rather than a Chat Completions, Responses, or Messages inference endpoint that can return VS Code tool calls. Registering only its model list would produce entries that lose Copilot's tool loop and permission UI.
 
-For a local OpenAI/Anthropic-compatible inference server, use VS Code's **Custom Endpoint** provider directly. Native OpenCode-server support is tracked in [#88](https://github.com/ltmoerdani/opencode-copilot-chat/issues/88).
+For a local OpenAI/Anthropic-compatible inference server, use VS Code's **Custom Endpoint** provider directly. Native OpenCode-server support is tracked in [#88](https://github.com/moodynooby/moodynooby-copilot-chat/issues/88).
 
 </details>
 
@@ -534,7 +524,7 @@ After reloading, open the **Agents window**, start a Copilot CLI session, and pi
 <details>
 <summary><b>How do I report a bug or request a model?</b></summary>
 
-[Open an issue](https://github.com/ltmoerdani/opencode-copilot-chat/issues/new/choose): pick the Bug Report or Feature Request template. Include the diagnostics report (`OpenCode Go: Diagnostics` or `OpenCode Zen: Diagnostics`).
+[Open an issue](https://github.com/moodynooby/moodynooby-copilot-chat/issues/new/choose): pick the Bug Report or Feature Request template. Include the diagnostics report (`OpenCode Go: Diagnostics` or `OpenCode Zen: Diagnostics`).
 
 </details>
 
@@ -554,8 +544,8 @@ flowchart LR
 
     F -->|GPT| G[" /responses "]
     F -->|Gemini| H[" :streamGenerateContent "]
-    F -->|Claude + MiniMax| I[" /messages "]
-    F -->|Qwen/DeepSeek/GLM/Kimi/MiMo| J[" /chat/completions "]
+    F -->|Claude + Qwen| I[" /messages "]
+    F -->|DeepSeek/GLM/Kimi/MiMo/MiniMax| J[" /chat/completions "]
 
     G & H & I & J --> K[opencode.ai gateway]
     K --> L[SSE Stream]
@@ -573,8 +563,8 @@ See [`docs/architecture/`](./docs/architecture/) for the full provider architect
 Contributions welcome! Whether it's a typo fix, new model support, or a screenshot, every PR counts.
 
 📋 See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for guidelines.
-💬 Discussions: [GitHub Discussions](https://github.com/ltmoerdani/opencode-copilot-chat/discussions)
-🐞 Bugs: [Issue Tracker](https://github.com/ltmoerdani/opencode-copilot-chat/issues)
+💬 Discussions: [GitHub Discussions](https://github.com/moodynooby/moodynooby-copilot-chat/discussions)
+🐞 Bugs: [Issue Tracker](https://github.com/moodynooby/moodynooby-copilot-chat/issues)
 
 ### Development
 
@@ -600,24 +590,24 @@ Press `F5` in VS Code to launch an **Extension Development Host**.
 - [ ] 🎨 Custom model aliases / favorites
 - [ ] 🌍 i18n (id, zh, ja)
 
-> Have an idea? [Start a discussion](https://github.com/ltmoerdani/opencode-copilot-chat/discussions/new) or [open a feature request](https://github.com/ltmoerdani/opencode-copilot-chat/issues/new?labels=enhancement&template=feature_request.md).
+> Have an idea? [Start a discussion](https://github.com/moodynooby/moodynooby-copilot-chat/discussions/new) or [open a feature request](https://github.com/moodynooby/moodynooby-copilot-chat/issues/new?labels=enhancement&template=feature_request.md).
 
 ---
 
 ## ⭐ Star History
 
 <p align="center">
-  <a href="https://github.com/ltmoerdani/opencode-copilot-chat">
-    <img src="https://img.shields.io/github/stars/ltmoerdani/opencode-copilot-chat?style=social" alt="GitHub stars" />
+  <a href="https://github.com/moodynooby/moodynooby-copilot-chat">
+    <img src="https://img.shields.io/github/stars/moodynooby/moodynooby-copilot-chat?style=social" alt="GitHub stars" />
   </a>
   &nbsp;👆 <b>Star this repo if it saved you money or unlocked a model you needed!</b>
 </p>
 
-<a href="https://star-history.com/#ltmoerdani/opencode-copilot-chat&Date">
+<a href="https://star-history.com/#moodynooby/moodynooby-copilot-chat&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ltmoerdani/opencode-copilot-chat&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ltmoerdani/opencode-copilot-chat&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ltmoerdani/opencode-copilot-chat&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=moodynooby/moodynooby-copilot-chat&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=moodynooby/moodynooby-copilot-chat&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=moodynooby/moodynooby-copilot-chat&type=Date" />
  </picture>
 </a>
 
@@ -627,10 +617,10 @@ Press `F5` in VS Code to launch an **Extension Development Host**.
 
 ## 💬 Community
 
-[![GitHub Discussions](https://img.shields.io/badge/Discussions-Ask%20questions-blue?logo=github)](https://github.com/ltmoerdani/opencode-copilot-chat/discussions)
-[![Issues](https://img.shields.io/badge/Issues-Report%20bugs-red?logo=github)](https://github.com/ltmoerdani/opencode-copilot-chat/issues)
-[![X / Twitter](https://img.shields.io/badge/X-Share-orange?logo=x)](https://twitter.com/intent/tweet?text=Using%2030%2B%20AI%20models%20in%20GitHub%20Copilot%20Chat%20for%20free%20with%20BYOK!&url=https://github.com/ltmoerdani/opencode-copilot-chat&hashtags=vscode,copilot,ai,byok,opencode)
-[![Reddit](https://img.shields.io/badge/Reddit-Share-orange?logo=reddit)](https://www.reddit.com/submit?url=https://github.com/ltmoerdani/opencode-copilot-chat&title=OpenCode%20for%20Copilot%20Chat)
+[![GitHub Discussions](https://img.shields.io/badge/Discussions-Ask%20questions-blue?logo=github)](https://github.com/moodynooby/moodynooby-copilot-chat/discussions)
+[![Issues](https://img.shields.io/badge/Issues-Report%20bugs-red?logo=github)](https://github.com/moodynooby/moodynooby-copilot-chat/issues)
+[![X / Twitter](https://img.shields.io/badge/X-Share-orange?logo=x)](https://twitter.com/intent/tweet?text=Using%2030%2B%20AI%20models%20in%20GitHub%20Copilot%20Chat%20for%20free%20with%20BYOK!&url=https://github.com/moodynooby/moodynooby-copilot-chat&hashtags=vscode,copilot,ai,byok,opencode)
+[![Reddit](https://img.shields.io/badge/Reddit-Share-orange?logo=reddit)](https://www.reddit.com/submit?url=https://github.com/moodynooby/moodynooby-copilot-chat&title=OpenCode%20for%20Copilot%20Chat)
 
 **If this saves you money or unlocks a model you needed, ⭐ star the repo and share it!**
 
@@ -638,7 +628,7 @@ Press `F5` in VS Code to launch an **Extension Development Host**.
 
 ## 📄 License
 
-[MIT](./LICENSE) © 2026 [ltmoerdani](https://github.com/ltmoerdani)
+[MIT](./LICENSE) © 2026 [MoodyNooby](https://github.com/moodynooby)
 
 OpenCode is a trademark of [opencode.ai](https://opencode.ai). This project is independent and not affiliated with GitHub, Microsoft, Anthropic, OpenAI, Google, or any model provider.
 

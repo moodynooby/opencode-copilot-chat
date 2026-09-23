@@ -13,7 +13,7 @@ import type { UsageSummary } from "./tracker";
  * where `percent` is an integer 0–100 computed server-side and `resetsAt` is
  * an ISO timestamp.
  */
-import { GO_USAGE_API_URL, GO_USAGE_FETCH_TIMEOUT_MS } from "../config";
+import { FALLBACK_USER_AGENT, GO_USAGE_API_URL, GO_USAGE_FETCH_TIMEOUT_MS, OPEN_CODE_CLIENT } from "../config";
 
 export { GO_USAGE_API_URL, GO_USAGE_SYNC_TTL_MS, GO_USAGE_FETCH_TIMEOUT_MS } from "../config";
 
@@ -76,6 +76,8 @@ export async function fetchGoUsage(
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
+        "User-Agent": FALLBACK_USER_AGENT,
+        "x-opencode-client": OPEN_CODE_CLIENT,
         // Gateway enforcement (docs/go): auxiliary OpenCode requests also need
         // a stable session id. No conversation here — caller supplies the
         // persisted per-installation id.

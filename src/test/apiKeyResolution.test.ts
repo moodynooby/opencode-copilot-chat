@@ -14,4 +14,10 @@ describe("resolveResponseApiKey", () => {
   it("falls back to SecretStorage after an extension-host cold start", () => {
     assert.equal(resolveResponseApiKey(undefined, undefined, "stored"), "stored");
   });
+
+  it("treats blank credentials as missing and trims stored keys", () => {
+    assert.equal(resolveResponseApiKey("  ", "registered", "stored"), "registered");
+    assert.equal(resolveResponseApiKey(undefined, undefined, "  stored  "), "stored");
+    assert.equal(resolveResponseApiKey("  ", "  ", "  "), undefined);
+  });
 });

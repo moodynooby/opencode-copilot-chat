@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   ACTIVE_PROFILE_KEY,
+  ANONYMOUS_ZEN_MODEL_IDS,
   appendApiPath,
   AGENT_HOST_BYOK_MINOR_VERSION,
   COMPLETION_REQUEST_TIMEOUT_MS,
@@ -72,9 +73,9 @@ function expectValue<T, A extends unknown[]>(
 describe("config — identity", () => {
   it("carries the extension identity", () => {
     assert.equal(CONFIG_SECTION, "opencodego");
-    assert.equal(EXTENSION_ID, "ltmoerdani.opencode-copilot-chat");
+    assert.equal(EXTENSION_ID, "moodynooby.opencode-copilot-chat");
     assert.equal(SECRET_KEY, "opencodego.apiKey");
-    expectValue("FALLBACK_USER_AGENT", FALLBACK_USER_AGENT, (v) => v.startsWith("opencode-copilot-chat/"), "versioned prefix");
+    expectValue("FALLBACK_USER_AGENT", FALLBACK_USER_AGENT, (v) => v.startsWith("opencode/"), "versioned OpenCode prefix");
   });
 });
 
@@ -170,6 +171,11 @@ describe("config — payload bounds", () => {
 });
 
 describe("config — model classification sets", () => {
+  it("keeps the verified anonymous allowlist explicit", () => {
+    assert.equal(ANONYMOUS_ZEN_MODEL_IDS.has("space-bunny-free"), true);
+    assert.equal(ANONYMOUS_ZEN_MODEL_IDS.has("big-pickle"), false);
+  });
+
   it("keeps the availability sets disjoint", () => {
     for (const id of KNOWN_UNAVAILABLE_MODEL_IDS) {
       assert.ok(!FREE_ZEN_MODEL_IDS.has(id), `${id} is both unavailable and free`);
@@ -212,7 +218,7 @@ describe("config — references", () => {
 describe("config — provider API URLs", () => {
   it("builds routes from the default bases", () => {
     assert.equal(appendApiPath(DEFAULT_GO_API_BASE_URL, "/chat/completions"), "https://opencode.ai/zen/go/v1/chat/completions");
-    assert.equal(appendApiPath(`${DEFAULT_ZEN_API_BASE_URL}/`, "models"), "https://opencode.ai/zen/v1/models");
+    assert.equal(appendApiPath(`${DEFAULT_ZEN_API_BASE_URL}/`, "v1/models"), "https://opencode.ai/inference/v1/models");
   });
 
   it("normalizes safe custom HTTP(S) bases and rejects unsafe values", () => {

@@ -8,18 +8,22 @@ import {
   ACTIVE_PROFILE_EXPLICIT_KEY,
   CONFIG_SECTION,
   DEFAULT_USAGE_CHART_DAYS,
+  DEFAULT_ZEN_API_BASE_URL,
   GO_EVER_TRACKED_KEY,
   GO_SERVER_USAGE_KEY,
   SETTING_AGENTS_WINDOW,
   SETTING_AUTO_ENABLE_AGENTS_WINDOW,
+  SETTING_FREE_ONLY,
   SETTING_SHOW_PROVIDER_PREFIX,
   SETTING_SHOW_USAGE_STATUS_BAR,
   SETTING_USAGE_CHART_DAYS,
+  ZEN_API_BASE_URL_SETTING,
+  normalizeApiBaseUrl,
   secretKeyFor,
 } from "./config";
 import { GoUsageTracker } from "./usage/tracker";
 import { buildUsageQuickPickItems } from "./usage/formatting";
-import { PROVIDERS } from "./provider/definitions";
+import { createProviderDefinitions, getUserAgent } from "./provider/definitions";
 import { OpenCodeProvider } from "./provider/OpenCodeProvider";
 import { getModelMetadataSnapshot } from "./models/metadataFetcher";
 import { GO_VENDOR, ZEN_VENDOR, AGENT_GO_VENDOR, AGENT_ZEN_VENDOR } from "./providerTypes";
@@ -159,8 +163,13 @@ export function activate(context: vscode.ExtensionContext) {
   // section, which would misread the Zen flag as opencodego.opencodezen.enabled.
   const goProviderEnabled = vscode.workspace.getConfiguration().get<boolean>(providerEnabledSetting(GO_VENDOR), true);
   const zenProviderEnabled = vscode.workspace.getConfiguration().get<boolean>(providerEnabledSetting(ZEN_VENDOR), true);
-  const goProvider = new OpenCodeProvider(context, PROVIDERS[GO_VENDOR]);
-  const zenProvider = new OpenCodeProvider(context, PROVIDERS[ZEN_VENDOR]);
+  const configuredZenBaseUrl = normalizeApiBaseUrl(
+    vscode.workspace.getConfiguration().get<string>(ZEN_API_BASE_URL_SETTING, DEFAULT_ZEN_API_BASE_URL),
+    DEFAULT_ZEN_API_BASE_URL,
+  );
+  const providers = createProviderDefinitions(configuredZenBaseUrl);
+  const goProvider = new OpenCodeProvider(context, providers[GO_VENDOR]);
+  const zenProvider = new OpenCodeProvider(context, providers[ZEN_VENDOR]);
   const modelInfoProviders: OpenCodeProvider[] = [goProvider, zenProvider];
 
   const subscriptions: vscode.Disposable[] = [
@@ -363,8 +372,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Agent-host providers for the Copilot Agents window (opt-in via config).
   const enableAgents = vscode.workspace.getConfiguration(CONFIG_SECTION).get<boolean>(SETTING_AGENTS_WINDOW, true);
   if (enableAgents && (goProviderEnabled || zenProviderEnabled)) {
-    const agentGoProvider = new OpenCodeProvider(context, PROVIDERS[AGENT_GO_VENDOR]);
-    const agentZenProvider = new OpenCodeProvider(context, PROVIDERS[AGENT_ZEN_VENDOR]);
+    const agentGoProvider = new OpenCodeProvider(context, providers[AGENT_GO_VENDOR]);
+    const agentZenProvider = new OpenCodeProvider(context, providers[AGENT_ZEN_VENDOR]);
     modelInfoProviders.push(agentGoProvider, agentZenProvider);
     subscriptions.push(
       ...(goProviderEnabled ? [vscode.lm.registerLanguageModelChatProvider(AGENT_GO_VENDOR, agentGoProvider)] : []),
@@ -384,7 +393,10 @@ export function activate(context: vscode.ExtensionContext) {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.${SETTING_SHOW_USAGE_STATUS_BAR}`)) {
         resetUsageStatusBar();
       }
-      if (event.affectsConfiguration(`${CONFIG_SECTION}.${SETTING_SHOW_PROVIDER_PREFIX}`)) {
+      if (
+        event.affectsConfiguration(`${CONFIG_SECTION}.${SETTING_SHOW_PROVIDER_PREFIX}`) ||
+        event.affectsConfiguration(`${CONFIG_SECTION}.${SETTING_FREE_ONLY}`)
+      ) {
         for (const provider of modelInfoProviders) {
           provider.notifyModelInfoChanged();
         }
@@ -426,7 +438,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Experimental inline code suggestions (issue #49). Opt-in via
   // `opencodego.inlineSuggestions`; the provider reads the config live.
   registerInlineCompletions(context, {
-    chatCompletionsUrl: PROVIDERS[GO_VENDOR].chatCompletionsUrl,
+    chatCompletionsUrl: providers[GO_VENDOR].chatCompletionsUrl,
+    userAgent: getUserAgent(),
     // Same resolution order as the chat path: the active profile's own key
     // first (covers multi-profile / BYOK-group setups), then the secret.
     resolveApiKey: async () => profileApiKeys.get(activeProfileFingerprint) ?? _extensionContext?.secrets.get(secretKeyFor(GO_VENDOR)),

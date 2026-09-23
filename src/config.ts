@@ -16,7 +16,7 @@
 // ─── Extension identity ──────────────────────────────────────────────────────
 
 /** VS Code extension ID (used for `extensions.supportAgentsWindow.<id>`). */
-export const EXTENSION_ID = "ltmoerdani.opencode-copilot-chat";
+export const EXTENSION_ID = "moodynooby.opencode-copilot-chat";
 /** SecretStorage key for the OpenCode Go API key (legacy name preserved). */
 export const SECRET_KEY = "opencodego.apiKey";
 /** SecretStorage key for the OpenCode Zen API key (per-vendor, so Go and Zen
@@ -26,10 +26,10 @@ export const ZEN_SECRET_KEY = "opencodezen.apiKey";
 export function secretKeyFor(vendor: "opencodego" | "opencodezen"): string {
   return vendor === "opencodezen" ? ZEN_SECRET_KEY : SECRET_KEY;
 }
-/** Client name sent in the `x-opencode-client` header. */
-export const OPEN_CODE_CLIENT = "vscode-copilot-chat";
+/** Client identifier sent in the `x-opencode-client` header. */
+export const OPEN_CODE_CLIENT = "app";
 /** Fallback only — overridden at runtime from packageJSON.version. */
-export const FALLBACK_USER_AGENT = "opencode-copilot-chat/0.6.0 VSCode";
+export const FALLBACK_USER_AGENT = "opencode/0.7.6";
 /** Configuration section under which all extension settings live. */
 export const CONFIG_SECTION = "opencodego";
 
@@ -47,6 +47,8 @@ export const SETTING_MAX_INPUT_TOKENS = "maxInputTokens";
 export const SETTING_DEBUG_REASONING = "debugReasoning";
 /** Base URL setting key for the provider's OpenAI-compatible API. */
 export const SETTING_API_BASE_URL = "apiBaseUrl";
+/** Full root-level setting key for the OpenCode Zen V2 inference base URL. */
+export const ZEN_API_BASE_URL_SETTING = "opencodezen.apiBaseUrl";
 export const SETTING_REQUEST_TIMEOUT_SECONDS = "requestTimeoutSeconds";
 export const SETTING_STREAM_IDLE_TIMEOUT_SECONDS = "streamIdleTimeoutSeconds";
 export const SETTING_STRIP_THINK_TAGS = "stripThinkTags";
@@ -106,13 +108,13 @@ export const MODEL_LIST_FETCH_MAX_RETRIES = 3;
 export const MODEL_LIST_FETCH_RETRY_BASE_MS = 500;
 /** TTL for the last successful model-list snapshot cached in globalState. */
 export const MODEL_LIST_CACHE_TTL_MS = 60 * 60 * 1000;
-/** globalState key suffix per vendor; full key = `${base}::<vendor>`. */
-export const MODEL_LIST_CACHE_KEY_PREFIX = "opencode.modelListCache.v1";
+/** globalState key prefix; provider, endpoint, and credential scope are appended by ModelListFetcher. */
+export const MODEL_LIST_CACHE_KEY_PREFIX = "opencode.modelListCache.v3";
 
 // ─── Model metadata (models.dev) ─────────────────────────────────────────────
 
 export const MODELS_DEV_API_URL = "https://models.dev/api.json";
-export const MODEL_METADATA_REVISION = "session-2026-05-21-b";
+export const MODEL_METADATA_REVISION = "session-2026-09-23-v2-zen";
 // The cache key embeds the bundled-data revision: when a release syncs the
 // offline fallback tables (new revision), the key changes and every stale
 // persisted snapshot is abandoned automatically (issue #231 — users were
@@ -127,8 +129,8 @@ export const DEFAULT_MODEL_MAX_OUTPUT_TOKENS = 65536;
 
 /** Default OpenCode Go API base URL; can be overridden in VS Code settings. */
 export const DEFAULT_GO_API_BASE_URL = "https://opencode.ai/zen/go/v1";
-/** Default OpenCode Zen API base URL; can be overridden in VS Code settings. */
-export const DEFAULT_ZEN_API_BASE_URL = "https://opencode.ai/zen/v1";
+/** Default OpenCode Zen V2 inference base URL; can be overridden in VS Code settings. */
+export const DEFAULT_ZEN_API_BASE_URL = "https://opencode.ai/inference";
 
 /** Normalize a configured API base URL, falling back when it is malformed. */
 export function normalizeApiBaseUrl(value: string, fallback: string): string {
@@ -358,6 +360,9 @@ export const TRANSIENT_FETCH_RETRY_BASE_MS = 500;
 export const TRANSIENT_FETCH_RETRY_JITTER_MS = 250;
 
 // ─── Model classification ────────────────────────────────────────────────────
+
+/** Zen model IDs verified to accept anonymous V2 Chat Completions requests. */
+export const ANONYMOUS_ZEN_MODEL_IDS = new Set(["space-bunny-free"]);
 
 /** Zen free-model IDs that do not end in `-free`. */
 export const FREE_ZEN_MODEL_IDS = new Set(["big-pickle"]);

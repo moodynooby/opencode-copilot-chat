@@ -109,17 +109,23 @@ export async function provideModelChatInformation(
     if (deps.hasByokGroupConfigured()) {
       return [];
     }
-    apiKey = await deps.context.secrets.get(secretKeyFor(deps.baseVendor));
+    const storedApiKey = await deps.context.secrets.get(secretKeyFor(deps.baseVendor));
+    apiKey = storedApiKey?.trim() || undefined;
   }
 
-  if (!apiKey) {
+  // Preserve the existing Go contract: Go discovery is unavailable without a
+  // key. Zen is the only provider that supports anonymous free-model discovery.
+  if (!apiKey && deps.baseVendor === GO_VENDOR) {
     return [];
   }
 
+  // A missing key is valid for OpenCode Zen's free conversational models. The
+  // model-list filter keeps paid models hidden until a service-account key is
+  // configured.
   // When a non-agent provider resolves its API key, persist it so that
   // agent-variant providers (which have no BYOK entry) can inherit it
   // from the extension's secret storage.
-  if (!deps.definition.isAgentVariant) {
+  if (!deps.definition.isAgentVariant && apiKey) {
     const existing = await deps.context.secrets.get(secretKeyFor(deps.baseVendor));
     if (existing !== apiKey) {
       await deps.context.secrets.store(secretKeyFor(deps.baseVendor), apiKey);
@@ -133,7 +139,7 @@ export async function provideModelChatInformation(
   // Create profile for this API key before fetching models, so the
   // profile is always registered in both the in-memory cache and
   // globalState, regardless of whether a request has been recorded.
-  if (deps.baseVendor === GO_VENDOR) {
+  if (deps.baseVendor === GO_VENDOR && apiKey) {
     ensureProfileSync(apiKey);
   }
 
@@ -167,9 +173,11 @@ export async function provideModelChatInformation(
     // the SecretStorage path.
     const agentHostModelId = `${effectiveModelId}::agent-host`;
     const limits = modelLimits(metadata, settings);
-    deps.apiKeysByModelId.set(modelId, apiKey);
-    deps.apiKeysByModelId.set(effectiveModelId, apiKey);
-    deps.apiKeysByModelId.set(agentHostModelId, apiKey);
+    if (apiKey) {
+      deps.apiKeysByModelId.set(modelId, apiKey);
+      deps.apiKeysByModelId.set(effectiveModelId, apiKey);
+      deps.apiKeysByModelId.set(agentHostModelId, apiKey);
+    }
 
     const capacityNote = CAPACITY_LIMITED_MODEL_NOTES[modelId];
     const modalityBadges = formatModalityBadges(metadata);

@@ -9,7 +9,7 @@
 
 import { buildCompletionPrompt } from "./prompt";
 import type { CompletionContext, CompletionEngine, CompletionResult } from "./types";
-import { COMPLETION_REQUEST_TIMEOUT_MS } from "../config";
+import { COMPLETION_REQUEST_TIMEOUT_MS, FALLBACK_USER_AGENT, OPEN_CODE_CLIENT } from "../config";
 
 export { COMPLETION_REQUEST_TIMEOUT_MS } from "../config";
 
@@ -19,6 +19,8 @@ export interface ChatCompletionEngineOptions {
   apiKey: string;
   /** Stable session id for the gateway's x-opencode-session enforcement. */
   sessionId?: string;
+  /** OpenCode-compatible User-Agent supplied by the extension host. */
+  userAgent?: string;
   timeoutMs?: number;
   log?: (msg: string) => void;
 }
@@ -79,6 +81,8 @@ export class ChatCompletionEngine implements CompletionEngine {
         headers: {
           Authorization: `Bearer ${this.options.apiKey}`,
           "Content-Type": "application/json",
+          "User-Agent": this.options.userAgent ?? FALLBACK_USER_AGENT,
+          "x-opencode-client": OPEN_CODE_CLIENT,
           // Gateway enforcement (docs/go): all OpenCode requests need a
           // session id; completions share the persisted per-installation id.
           ...(this.options.sessionId ? { "x-opencode-session": this.options.sessionId } : {}),
