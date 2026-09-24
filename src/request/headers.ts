@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
@@ -17,6 +17,19 @@ import { isRecord } from "../utils";
 
 /** globalState key for the persisted auxiliary session id. */
 const AUX_SESSION_STATE_KEY = "opencode.auxSessionId";
+const OPEN_CODE_SESSION_ID_PATTERN = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
+
+/** Convert an arbitrary host session identifier to OpenCode's wire format. */
+export function normalizeOpenCodeSessionId(value: string): string {
+  const cleaned = cleanHeaderValue(value);
+  if (OPEN_CODE_SESSION_ID_PATTERN.test(cleaned)) {
+    return cleaned;
+  }
+  return `ses_${createHash("sha256")
+    .update(cleaned || "opencode-session", "utf8")
+    .digest("hex")
+    .slice(0, 26)}`;
+}
 
 /**
  * Stable per-installation session id for auxiliary gateway requests that have
@@ -26,9 +39,13 @@ const AUX_SESSION_STATE_KEY = "opencode.auxSessionId";
 export function auxiliarySessionId(context: vscode.ExtensionContext): string {
   const existing = context.globalState.get<string>(AUX_SESSION_STATE_KEY);
   if (existing && existing.trim()) {
-    return cleanHeaderValue(existing);
+    const normalized = normalizeOpenCodeSessionId(existing);
+    if (normalized !== existing) {
+      void context.globalState.update(AUX_SESSION_STATE_KEY, normalized);
+    }
+    return normalized;
   }
-  const id = cleanHeaderValue(`ses_${randomUUID().replace(/-/g, "").slice(0, 26)}`);
+  const id = normalizeOpenCodeSessionId(`ses_${randomUUID().replace(/-/g, "").slice(0, 26)}`);
   void context.globalState.update(AUX_SESSION_STATE_KEY, id);
   return id;
 }
@@ -102,12 +119,29 @@ export function resolveProjectCacheKey(modelId: string): string | null {
 // identifier everywhere, so we first probe a few known internal fields and then
 // fall back to a stable hash of the first messages in the conversation. That
 // preserves sticky routing and cache affinity without depending on hidden state.
+/**
+ * Build the distributed-tracing pair emitted by the OpenCode HTTP client.
+ *
+ * The public free-tier gateway uses these headers as part of its client
+ * compatibility check. Keep the B3 and W3C values on the same trace/span pair;
+ * the fourth B3 component is the parent span in the official client format.
+ */
+function buildOpenCodeTraceHeaders(): Record<string, string> {
+  const traceId = randomBytes(16).toString("hex");
+  const spanId = randomBytes(8).toString("hex");
+  const parentSpanId = randomBytes(8).toString("hex");
+  return {
+    b3: `${traceId}-${spanId}-1-${parentSpanId}`,
+    traceparent: `00-${traceId}-${spanId}-01`,
+  };
+}
+
 export function buildOpenCodeRequestHeaders(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
   options: vscode.ProvideLanguageModelChatResponseOptions,
   modelId: string,
 ): Record<string, string> {
-  const sessionId = cleanHeaderValue(
+  const sessionId = normalizeOpenCodeSessionId(
     findStringOption(options, [
       "sessionId",
       "sessionID",
@@ -128,6 +162,7 @@ export function buildOpenCodeRequestHeaders(
 
   const projectCacheKey = resolveProjectCacheKey(modelId);
   const headers: Record<string, string> = {
+    ...buildOpenCodeTraceHeaders(),
     "x-opencode-session": sessionId,
     "x-session-affinity": sessionId,
     "x-session-id": sessionId,

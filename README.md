@@ -42,7 +42,7 @@
 | 🎯 **Smart routing**             | Each model family auto-routes to its native transport (`/responses`, `/messages`, `streamGenerateContent`, `/chat/completions`)                                                                                                                       |
 | 🖼️ **Vision + PDF + Audio**      | Multimodal models pass through image, PDF, audio, and video inputs. Oversized images auto-resize to 2000×2000 / 5MB to match the gateway contract.                                                                                                    |
 | 📐 **Context-size picker**       | Kimi K3 and other tiered-context models expose `256K` vs full-window selection in the per-model configuration, with the cheaper tier selected by default.                                                                                             |
-| 🔒 **Your key, your control**    | The verified anonymous Zen model needs no key; optional Console and Go keys are stored by VS Code and never leave your machine                                                                                                                        |
+| 🔒 **Your key, your control**    | Anonymous legacy Zen free models use no key; optional Console and Go keys are stored by VS Code and never leave your machine. The bridge uses only real Copilot read/terminal tools.                                                                  |
 
 ---
 
@@ -61,7 +61,7 @@
 1. **Install or update [VS Code](https://code.visualstudio.com/)** to version 1.125 or newer. OpenCode BYOK chat works without a GitHub sign-in or Copilot plan.
 2. **Install this extension** from the VS Code Marketplace (or press `F5` in this repo for dev mode).
 3. **Choose access:**
-   - **Free Zen models:** No API key is required for the verified anonymous model. The extension discovers the current catalog dynamically from the official OpenCode-compatible Zen gateway.
+   - **Free Zen models:** No API key is required in the default legacy transport. The extension discovers the current catalog dynamically; non-seed free models use a compatibility bridge only when Agent Mode supplies real file-read and terminal tools.
    - **Paid Zen models (optional):** Create a service-account key in the [OpenCode Console](https://opencode.ai/console). Add credits to use Claude, GPT, Gemini, and other paid models.
    - **OpenCode Go (optional):** Subscribe to **OpenCode Go** ($10/mo, $5 first month promo) for curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro.
 4. **Open Copilot Chat** (Cmd/Ctrl+Shift+I, or click the Copilot icon).
@@ -131,9 +131,9 @@ Curated open coding models, refreshed live from the endpoint. Deprecated/legacy 
 
 ### 🆓 OpenCode Zen free models (live catalog)
 
-OpenCode Zen exposes a rotating set of free conversational models through the official OpenCode-compatible gateway. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. `space-bunny-free` is currently verified for anonymous Chat Completions access. Other free catalog entries such as `big-pickle`, MiMo, Ling, and Nemotron variants require a Console service-account key under the current free-tier policy, as do free models routed through Responses, Google, or Anthropic.
+OpenCode Zen exposes a rotating set of free conversational models through the official OpenCode-compatible gateway. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. In the default legacy transport, verified free models use a request-scoped compatibility bridge only when Agent Mode supplies real file-read and terminal tools; no substitute tool is executed by the extension. The bridge preserves VS Code tool execution and permissions. Models that are unavailable upstream or catalog-only System One entries remain filtered.
 
-> Free models can change without notice and may have stricter anonymous rate limits. Configure a Console service-account key when you need paid models, other free models, or workspace-aware access.
+> Free models can change without notice and may have stricter anonymous rate limits. The bridge currently requires Copilot Agent Mode's real read-file and terminal tools; use a Console service-account key for paid models or any free model your active client cannot tool-call.
 
 The default transport follows the current OpenCode client and uses the official `/zen/v1` gateway with its public-mode sentinel. The V2 Console transport is retained as an experimental, source-only path: change `ZEN_TRANSPORT_MODE` in `src/config.ts` from `"legacy"` to `"v2"` to test it. There is no automatic fallback between transports.
 
@@ -455,7 +455,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Is it really free? What's the catch?</b></summary>
 
-**OpenCode Zen** offers a dynamic set of rotating free conversational models. `space-bunny-free` is currently verified for anonymous Chat Completions access; other free models and all paid Zen models require a Console service-account key (paid models also require credits). Anonymous access can be rate-limited and the upstream free-tier policy may change.
+**OpenCode Zen** offers a dynamic set of rotating free conversational models. In the default legacy transport, supported free models can run anonymously when Agent Mode supplies the real read-file and terminal tools required by the gateway compatibility bridge. The extension does not execute substitute tools. Paid Zen models still require a Console service-account key and credits. Anonymous access can be rate-limited and the upstream free-tier policy may change.
 
 **OpenCode Go** is a **subscription**: **$10/mo** ($5 first month promo) with generous usage limits (5h/$12, weekly/$30, monthly/$60). It unlocks curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro. When you hit the limit, you can continue using the free Zen models.
 

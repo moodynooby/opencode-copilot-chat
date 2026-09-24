@@ -76,15 +76,27 @@ export function isSupportedZenModel(modelId: string): boolean {
 /**
  * Return whether a Zen model can be called without a Console key.
  *
- * The official OpenCode-compatible legacy gateway accepts the `public` sentinel,
- * but its public free tier also applies a client/tool policy. Until a real
- * Copilot Chat request has been verified against that policy, keep the same
- * conservative model allowlist used by the V2 path.
+ * The official OpenCode-compatible legacy gateway accepts the `public`
+ * sentinel. In legacy mode, supported free models are eligible for anonymous
+ * discovery; all except the verified seed model use the request-scoped real
+ * read/shell tool bridge. The experimental V2 path retains its narrow seed
+ * allowlist until its own client policy is verified.
  */
-export function isAnonymousZenModel(modelId: string, _mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
+export function isAnonymousZenModel(modelId: string, mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
   if (!isFreeModel(modelId) || !isSupportedZenModel(modelId)) return false;
+  if (mode === "legacy") {
+    // The legacy gateway accepts the verified anonymous model directly. Other
+    // free models use the request-scoped read/shell compatibility bridge and
+    // are still anonymous from the gateway's perspective.
+    return true;
+  }
   if (lookupModelRegistryEntry(modelId, ZEN_VENDOR).endpointKind !== "chat-completions") return false;
   return ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
+}
+
+/** Whether a free Zen model needs the request-scoped real-tool bridge. */
+export function requiresZenToolBridge(modelId: string, mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
+  return mode === "legacy" && isFreeModel(modelId) && isSupportedZenModel(modelId) && !ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
 }
 
 function zenModelAllowed(modelId: string, apiKey: string | undefined, mode: ZenTransportMode): boolean {

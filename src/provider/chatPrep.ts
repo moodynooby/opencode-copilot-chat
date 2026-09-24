@@ -41,7 +41,8 @@ import {
   updateUsageStatusBar,
 } from "../usage/dashboard";
 import { GO_VENDOR, type ProviderVendor } from "../providerTypes";
-import { isAnonymousZenModel, type OpenCodeModel, type ProviderDefinition } from "./definitions";
+import { isAnonymousZenModel, requiresZenToolBridge, type OpenCodeModel, type ProviderDefinition } from "./definitions";
+import { createZenToolBridge } from "./zenToolBridge";
 import type { TransportSummaryLog } from "./transportLog";
 
 /**
@@ -97,6 +98,21 @@ export async function prepareChatRequest(
   if (!apiKey && (deps.baseVendor === GO_VENDOR || !isAnonymousZenModel(rawModelId, deps.definition.zenTransportMode))) {
     throw new Error(
       `${deps.definition.displayName} API key is required for this model. Use the ${deps.definition.displayName} gear icon in Language Models to configure it, then reload the window.`,
+    );
+  }
+  if (
+    deps.baseVendor !== GO_VENDOR &&
+    requiresZenToolBridge(rawModelId, deps.definition.zenTransportMode) &&
+    !createZenToolBridge(options.tools)
+  ) {
+    const availableTools =
+      options.tools
+        ?.map((tool) => tool.name)
+        .sort()
+        .join(", ") || "none";
+    deps.log(`[zen-tool-bridge] unavailable for ${rawModelId}; available tools: ${availableTools}`);
+    throw new Error(
+      `${deps.definition.displayName} needs the Copilot Agent read-file and terminal tools for this anonymous free model. Open Agent Mode and retry; no substitute tool was created.`,
     );
   }
   const convertedMessages = await Promise.all(

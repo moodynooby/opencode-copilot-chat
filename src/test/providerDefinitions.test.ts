@@ -22,12 +22,14 @@ moduleResolver._resolveFilename = function (request: string, parent: unknown, ..
 let createProviderDefinitions: typeof import("../provider/definitions.js").createProviderDefinitions;
 let isSupportedZenModel: typeof import("../provider/definitions.js").isSupportedZenModel;
 let isAnonymousZenModel: typeof import("../provider/definitions.js").isAnonymousZenModel;
+let requiresZenToolBridge: typeof import("../provider/definitions.js").requiresZenToolBridge;
 
 before(async () => {
   const definitions = await import("../provider/definitions.js");
   createProviderDefinitions = definitions.createProviderDefinitions;
   isSupportedZenModel = definitions.isSupportedZenModel;
   isAnonymousZenModel = definitions.isAnonymousZenModel;
+  requiresZenToolBridge = definitions.requiresZenToolBridge;
 });
 
 describe("OpenCode Zen provider definitions", () => {
@@ -53,14 +55,14 @@ describe("OpenCode Zen provider definitions", () => {
     assert.equal(zen.googleModelsUrl, "https://gateway.example.test/inference/google/v1beta/models");
   });
 
-  it("keeps anonymous discovery conservative in legacy mode", () => {
+  it("keeps all supported free models anonymous in legacy mode", () => {
     const zen = createProviderDefinitions().opencodezen;
     const filterModel = zen.filterModel;
     assert.ok(filterModel);
 
     assert.equal(filterModel("space-bunny-free", undefined), true);
-    assert.equal(filterModel("big-pickle", undefined), false);
-    assert.equal(filterModel("muse-spark-1.3-contributor-free", undefined), false);
+    assert.equal(filterModel("big-pickle", undefined), true);
+    assert.equal(filterModel("muse-spark-1.3-contributor-free", undefined), true);
     assert.equal(filterModel("gpt-5.5", undefined), false);
   });
 
@@ -80,12 +82,15 @@ describe("OpenCode Zen provider definitions", () => {
     assert.equal(isSupportedZenModel("test-novita-dsf4.1"), false);
   });
 
-  it("uses the verified anonymous allowlist for both source transports", () => {
-    assert.equal(isAnonymousZenModel("big-pickle", "legacy"), false);
+  it("uses the bridge-gated free-model policy in legacy mode", () => {
+    assert.equal(isAnonymousZenModel("big-pickle", "legacy"), true);
     assert.equal(isAnonymousZenModel("big-pickle", "v2"), false);
     assert.equal(isAnonymousZenModel("space-bunny-free", "legacy"), true);
     assert.equal(isAnonymousZenModel("space-bunny-free", "v2"), true);
-    assert.equal(isAnonymousZenModel("muse-spark-1.3-contributor-free", "legacy"), false);
+    assert.equal(isAnonymousZenModel("muse-spark-1.3-contributor-free", "legacy"), true);
     assert.equal(isAnonymousZenModel("gpt-5.5", "legacy"), false);
+    assert.equal(requiresZenToolBridge("big-pickle", "legacy"), true);
+    assert.equal(requiresZenToolBridge("space-bunny-free", "legacy"), false);
+    assert.equal(requiresZenToolBridge("big-pickle", "v2"), false);
   });
 });

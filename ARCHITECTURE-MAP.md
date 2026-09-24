@@ -272,7 +272,7 @@ flowchart LR
 
 ### 5.2 Model Discovery (`provideLanguageModelChatInformation`)
 
-1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback. A missing Zen key uses the official legacy `public` sentinel only for the verified anonymous model set; other models require a key.
+1. **Key resolution**: BYOK `options.configuration.apiKey` → (if BYOK group observed, return `[]` to avoid duplicates, issue #106/#131) → `SecretStorage` fallback. Legacy Zen uses the official `public` sentinel; free models other than the verified seed require the request-scoped real read/shell tool bridge and fail closed when those tools are absent.
 2. Persist key to SecretStorage (non-agent variants) so agent variants inherit it.
 3. `fetchModels()` — live GET `modelsUrl` with retry/backoff/timeout (default Zen uses `/zen/v1/models`; the source-disabled V2 experiment uses `/inference/v1/models`; Go remains `/zen/go/v1/models`) → `filterAvailableModels()` (drops unsupported catalog entries, `KNOWN_UNAVAILABLE_MODEL_IDS`, deprecated Zen models cross-checked against gateway response (issue #182), `freeOnly`, and credential-aware paid-model filtering).
 4. Per model: `resolveModelMetadata()` → `resolveModelRouting()` → `modelLimits()` → `modelCapabilities()` → `modelConfigurationSchema()` (thinking submenu + context-size tier) → build `OpenCodeModel` (general variant or `::agent-host` variant with `targetChatSessionType: "copilotcli"`).

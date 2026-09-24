@@ -43,7 +43,7 @@ A configured service-account key is sent as `Authorization: Bearer <key>`. With 
 Authorization: Bearer public
 ```
 
-The current gateway applies a client/tool policy to public free models. Until a real Copilot Chat request has been verified against that policy, anonymous discovery remains limited to the conservative allowlist in `src/config.ts`; other free models are available after a key is configured.
+The current gateway applies a client/tool policy to public free models. The default legacy transport now handles that policy with a request-scoped compatibility bridge: when the request contains real Copilot read-file and terminal tools, the provider adds OpenCode-compatible `read` and `shell` descriptors, maps calls back to the original VS Code tool names, and preserves the normal VS Code execution/permission loop. It does not add dummy tools or invoke private tools. Requests without both real tools fail closed before dispatch. The experimental V2 path retains the narrow seed allowlist until its own client policy is verified.
 
 ### Experimental V2 Console transport
 
@@ -77,7 +77,7 @@ The gateway version is deliberately separate from the extension package version.
 1. Unsupported catalog-entry filtering (`jev-*`, `test`, and `test-novita-dsf4.1`).
 2. Availability/deprecation filtering.
 3. `freeOnly` filtering.
-4. Credential-aware filtering: anonymous callers see the verified keyless model set only; authenticated callers may see paid and other free models.
+4. Credential-aware filtering: legacy anonymous callers see supported free conversational models; the request-scoped bridge gates non-seed models on real read/terminal tools. V2 anonymous callers retain the verified keyless seed set; authenticated callers may see paid and other free models.
 
 Catalog snapshots are cached by provider, endpoint, transport-specific URL, and a SHA-256 credential scope. This prevents one workspace's model permissions from being reused for another key. The cache prefix is versioned so the transport switch abandons incompatible snapshots.
 
@@ -94,4 +94,4 @@ The active transport supplies the base URL; the registry supplies the API family
 
 ## Verification
 
-The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, and OpenCode identity headers. `npm run lint` is the required repository gate. Live validation must cover a catalog request and a streaming request through the same request path used by Copilot Chat; the public gateway can still reject free models based on its client/tool policy.
+The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, OpenCode identity headers, and the real-tool bridge. `npm run lint` is the required repository gate. Live validation covers the catalog and streaming request path with the bridge's real read/shell aliases; unavailable catalog entries remain filtered.

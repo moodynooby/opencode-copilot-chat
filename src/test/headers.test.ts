@@ -25,11 +25,13 @@ moduleResolver._resolveFilename = function (request: string, parent: unknown, ..
 
 let hashRawCacheKey: typeof import("../request/headers.js").hashRawCacheKey;
 let buildOpenCodeRequestHeaders: typeof import("../request/headers.js").buildOpenCodeRequestHeaders;
+let normalizeOpenCodeSessionId: typeof import("../request/headers.js").normalizeOpenCodeSessionId;
 
 before(async () => {
   const mod = await import("../request/headers.js");
   hashRawCacheKey = mod.hashRawCacheKey;
   buildOpenCodeRequestHeaders = mod.buildOpenCodeRequestHeaders;
+  normalizeOpenCodeSessionId = mod.normalizeOpenCodeSessionId;
 });
 
 describe("OpenCode application request identity", () => {
@@ -41,12 +43,22 @@ describe("OpenCode application request identity", () => {
     );
 
     assert.equal(headers["x-opencode-client"], "app");
-    assert.equal(headers["x-opencode-session"], "session-test");
-    assert.equal(headers["x-session-affinity"], "session-test");
-    assert.equal(headers["x-session-id"], "session-test");
+    assert.match(headers["x-opencode-session"], /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
+    assert.equal(headers["x-session-affinity"], headers["x-opencode-session"]);
+    assert.equal(headers["x-session-id"], headers["x-opencode-session"]);
     assert.equal(headers["x-opencode-request"], "request-test");
     assert.match(headers["User-Agent"], /^opencode\/latest\//);
     assert.match(headers["x-opencode-project"], /^[a-f0-9]{64}$/);
+    assert.match(headers.b3, /^[a-f0-9]{32}-[a-f0-9]{16}-1-[a-f0-9]{16}$/);
+    assert.match(headers.traceparent, /^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
+  });
+});
+
+describe("OpenCode session identifiers", () => {
+  it("preserves valid IDs and hashes arbitrary host IDs into the wire format", () => {
+    const valid = "ses_0123456789abABCDEFGHIJKLMN";
+    assert.equal(normalizeOpenCodeSessionId(valid), valid);
+    assert.match(normalizeOpenCodeSessionId("host-session-123"), /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
   });
 });
 

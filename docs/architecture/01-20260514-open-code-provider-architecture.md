@@ -60,7 +60,7 @@ This document is intentionally backdated to the original provider-architecture s
 
 ### 2026-09-24 — OpenCode-compatible Zen transport with experimental V2 path
 
-OpenCode Zen now follows the current OpenCode client by default: live catalog discovery at `/zen/v1/models`, family-scoped OpenAI/Anthropic/Google routes, and the official `Bearer public` no-key sentinel. The V2 Console transport remains available as a source-only experimental path selected by `ZEN_TRANSPORT_MODE` in `src/config.ts`; there is no automatic fallback. Anonymous discovery stays limited to the verified `space-bunny-free` model until a real Copilot Chat request is confirmed against the gateway's client/tool policy. Other free models and all paid models require a key. OpenCode Go remains on its existing gateway contract. The fork identifies requests with the official OpenCode app/session header shape while retaining its own extension identity (`moodynooby.opencode-copilot-chat`).
+OpenCode Zen now follows the current OpenCode client by default: live catalog discovery at `/zen/v1/models`, family-scoped OpenAI/Anthropic/Google routes, the official `Bearer public` no-key sentinel, and the official B3/W3C trace headers. The V2 Console transport remains available as a source-only experimental path selected by `ZEN_TRANSPORT_MODE` in `src/config.ts`; there is no automatic fallback. In legacy mode, supported free models are eligible anonymously; all except the verified seed use a request-scoped compatibility bridge that adds OpenCode `read`/`shell` aliases only when real Copilot read-file and terminal tools are present. The bridge translates calls back to the original VS Code tool names, so VS Code remains the executor and permissions remain intact. The bridge fails closed when those tools are absent. OpenCode Go remains on its existing gateway contract. The fork identifies requests with the official OpenCode app/session/project header shape while retaining its own extension identity (`moodynooby.opencode-copilot-chat`).
 
 ---
 
@@ -228,6 +228,8 @@ The request layer maps VS Code chat parts and tools into the correct request bod
 ## Tool Calling
 
 Tool calling is required for Copilot Agent workflows such as reading files, searching code, editing files, and running terminal commands.
+
+For anonymous legacy Zen models other than the verified seed, `src/provider/zenToolBridge.ts` adds only the OpenCode `read` and `shell` descriptors when the current request contains compatible real Copilot tools. It translates the model call and assistant history back to the original VS Code names; it never invokes private tools or creates a substitute executor. Requests without both real tools fail before network dispatch.
 
 The extension supports:
 

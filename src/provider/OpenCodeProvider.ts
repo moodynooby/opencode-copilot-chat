@@ -18,7 +18,8 @@ import { streamResponsesApi as runStreamResponsesApi } from "../transports/respo
 
 import { GO_VENDOR, resolveBaseVendor, type ProviderVendor } from "../providerTypes";
 
-import { ModelListEntry, OpenCodeModel, ProviderDefinition } from "./definitions";
+import { ModelListEntry, OpenCodeModel, ProviderDefinition, requiresZenToolBridge } from "./definitions";
+import { createZenToolBridge, withZenToolBridgeTools } from "./zenToolBridge";
 import {
   buildAnthropicMessagesRequestBody,
   buildChatCompletionsRequestBody,
@@ -330,6 +331,16 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
       onTransportSummary,
     } = prepared;
 
+    const zenToolBridge = requiresZenToolBridge(rawModelId, this.definition.zenTransportMode)
+      ? createZenToolBridge(options.tools)
+      : undefined;
+    if (zenToolBridge) {
+      zenToolBridge.rewriteApiMessages(apiMessages);
+      this.log(`[zen-tool-bridge] mapped real Copilot read/shell tools for ${rawModelId}`);
+    }
+    const requestOptions = withZenToolBridgeTools(options, zenToolBridge);
+    const responseProgress = zenToolBridge?.wrapProgress(progress) ?? progress;
+
     // ISSUE #220: one shared channel for the provider's lifetime — the
     // prepared-request object no longer creates a fresh channel per request.
     const outputChannel = this.getOutputChannel();
@@ -348,9 +359,9 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           providerDisplayName: this.definition.displayName,
           apiKey,
           modelId: rawModelId,
-          body: buildAnthropicMessagesRequestBody(rawModelId, apiMessages, options, settings, metadata, limits),
+          body: buildAnthropicMessagesRequestBody(rawModelId, apiMessages, requestOptions, settings, metadata, limits),
           requestHeaders,
-          progress,
+          progress: responseProgress,
           token,
           output: outputChannel,
           debugReasoning: settings.debugReasoning,
@@ -372,10 +383,10 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           providerDisplayName: this.definition.displayName,
           apiKey,
           modelId: rawModelId,
-          body: buildResponsesRequestBody(rawModelId, apiMessages, options, settings, metadata, limits),
+          body: buildResponsesRequestBody(rawModelId, apiMessages, requestOptions, settings, metadata, limits),
           authHeaders: buildOpenCodeGatewayAuthHeaders("responses", apiKey, this.baseVendor, this.definition.zenTransportMode),
           requestHeaders,
-          progress,
+          progress: responseProgress,
           token,
           output: outputChannel,
           debugReasoning: settings.debugReasoning,
@@ -401,9 +412,9 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           providerDisplayName: this.definition.displayName,
           apiKey,
           modelId: rawModelId,
-          body: buildGoogleGenerateContentBody(apiMessages, options, settings, limits),
+          body: buildGoogleGenerateContentBody(apiMessages, requestOptions, settings, limits),
           requestHeaders,
-          progress,
+          progress: responseProgress,
           token,
           output: outputChannel,
           debugReasoning: settings.debugReasoning,
@@ -428,10 +439,10 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
         providerDisplayName: this.definition.displayName,
         apiKey,
         modelId: rawModelId,
-        body: buildChatCompletionsRequestBody(rawModelId, apiMessages, options, settings, metadata, limits),
+        body: buildChatCompletionsRequestBody(rawModelId, apiMessages, requestOptions, settings, metadata, limits),
         authHeaders: buildOpenCodeGatewayAuthHeaders("chat-completions", apiKey, this.baseVendor, this.definition.zenTransportMode),
         requestHeaders,
-        progress,
+        progress: responseProgress,
         token,
         output: outputChannel,
         debugReasoning: settings.debugReasoning,

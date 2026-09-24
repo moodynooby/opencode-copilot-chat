@@ -384,11 +384,12 @@ export const TRANSIENT_FETCH_RETRY_JITTER_MS = 250;
 // ─── Model classification ────────────────────────────────────────────────────
 
 /**
- * Seed capability set for keyless Zen Chat Completions requests.
+ * Seed capability set for keyless Zen requests that do not need the
+ * request-scoped real-tool bridge.
  *
- * The live catalog rotates, so this is intentionally a conservative seed rather
- * than a permanent model list. Refresh it when a real client capability probe
- * verifies another model; never infer anonymous access from `-free` alone.
+ * Other supported free models are eligible in legacy mode only when the
+ * request supplies real Copilot read and terminal tools. The live catalog
+ * rotates; never infer bridge support from `-free` alone.
  */
 export const ANONYMOUS_ZEN_MODEL_IDS = new Set(["space-bunny-free"]);
 
