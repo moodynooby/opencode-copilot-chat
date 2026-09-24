@@ -78,12 +78,27 @@ describe("normalizeResponsesStreamEvent — output_text.done and output_item.don
     assert.equal(result.choices[0]?.delta.responseDoneText, "Hi there!");
   });
 
-  it("ignores response.output_item.done for non-message items", () => {
+  it("maps response.output_item.done (function_call) to authoritative tool arguments", () => {
     const result = normalizeResponsesStreamEvent({
       type: "response.output_item.done",
-      item: { type: "function_call", name: "get_weather" },
-    }) as { choices: unknown[] };
-    assert.equal(result.choices.length, 0);
+      output_index: 2,
+      item: { type: "function_call", name: "read", call_id: "call_1", arguments: '{"path":"/x.ts"}' },
+    }) as { choices: { delta: { tool_calls: Record<string, unknown>[] } }[] };
+    const call = result.choices[0].delta.tool_calls[0];
+    assert.equal(result.choices.length, 1);
+    assert.equal(call.replacePending, true);
+    assert.deepEqual(call.function, { name: "read", arguments: '{"path":"/x.ts"}' });
+  });
+
+  it("maps response.function_call_arguments.done to an authoritative replacement", () => {
+    const result = normalizeResponsesStreamEvent({
+      type: "response.function_call_arguments.done",
+      output_index: 2,
+      arguments: '{"path":"/x.ts"}',
+    }) as { choices: { delta: { tool_calls: Record<string, unknown>[] } }[] };
+    const call = result.choices[0].delta.tool_calls[0];
+    assert.equal(call.replacePending, true);
+    assert.deepEqual(call.function, { arguments: '{"path":"/x.ts"}' });
   });
 
   it("returns empty choices for response.output_text.done with no text", () => {

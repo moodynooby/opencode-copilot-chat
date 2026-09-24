@@ -92,6 +92,8 @@ The model registry remains the source of truth:
 
 The active transport supplies the base URL; the registry supplies the API family. Go routing is unchanged.
 
+Responses tool-call `*.done` events are authoritative snapshots, not additional argument fragments. The normalizer replaces any pending name/arguments for that output index. This preserves gateways such as Muse 1.3 that can emit the complete call only in `response.output_item.done`, without duplicating calls from gateways that send both deltas and done snapshots.
+
 ## Verification
 
 The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, OpenCode identity headers, and the real-tool bridge. `npm run lint` is the required repository gate. Live validation covers the catalog and streaming request path with the bridge's real read/shell aliases; unavailable catalog entries remain filtered.

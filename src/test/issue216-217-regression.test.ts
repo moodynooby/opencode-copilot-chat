@@ -15,6 +15,8 @@ import os from "node:os";
  *   rejects the whole request otherwise).
  * - #217: the real luna event shapes must extract into usable parts (tool
  *   calls / text), including flat AND nested output_text.delta payloads.
+ * - Muse 1.3: a done-only function call must retain its arguments through the
+ *   Responses end-of-stream flush and Zen tool bridge.
  */
 
 const vscodeMockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vscode-mock-216-")), "index.js");
@@ -173,7 +175,7 @@ describe("#216 Test B: history trim keeps function_call pairing intact", () => {
   });
 });
 
-describe("#217: luna Responses event shapes extract into parts", () => {
+describe("Responses tool/text event shapes extract into parts", () => {
   before(async () => {
     const extractors = await import("../transports/extractors.js");
     OpenAiResponseExtractor = extractors.OpenAiResponseExtractor;
@@ -192,10 +194,68 @@ describe("#217: luna Responses event shapes extract into parts", () => {
     }
     // The response.completed event carries finish_reason, which is where the
     // extractor flushes accumulated tool calls.
-    const tool = parts.find((p) => typeof p.name === "string");
-    assert.ok(tool, "expected at least one usable part from a healthy luna tool-call stream");
+    const tools = parts.filter((part) => typeof part.name === "string");
+    assert.equal(tools.length, 1, "delta and done snapshots must produce exactly one tool call");
+    const tool = tools[0];
+    assert.ok(tool, "expected a usable part from a healthy luna tool-call stream");
     assert.equal(tool.name, "read_file");
     assert.deepEqual(tool.input, { filePath: "/x.ts" });
+  });
+
+  it("Muse 1.3 done-only tool arguments survive the Zen bridge end-of-stream flush", async () => {
+    const extractor = new OpenAiResponseExtractor(undefined, undefined, undefined, undefined, undefined, undefined, false);
+    const events: Array<Record<string, unknown>> = [
+      {
+        type: "response.output_item.added",
+        output_index: 0,
+        item: { id: "fc_1", type: "function_call", status: "in_progress", name: "read", call_id: "call_muse", arguments: "" },
+      },
+      {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: {
+          id: "fc_1",
+          type: "function_call",
+          status: "completed",
+          name: "read",
+          call_id: "call_muse",
+          arguments: '{"path":"/x.ts"}',
+        },
+      },
+      { type: "response.completed", response: { id: "resp_muse", status: "completed" } },
+    ];
+    for (const event of events) {
+      extractor.extractStreamParts(normalizeResponsesStreamEvent(event));
+    }
+
+    const { createZenToolBridge } = await import("../provider/zenToolBridge.js");
+    const bridge = createZenToolBridge([
+      {
+        name: "read_file",
+        description: "Read a workspace file.",
+        inputSchema: { type: "object", properties: { filePath: { type: "string" } }, required: ["filePath"] },
+      },
+      {
+        name: "run_in_terminal",
+        description: "Run a terminal command.",
+        inputSchema: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      },
+    ]);
+    assert.ok(bridge);
+    const reported: Array<{ callId: string; name: string; input: unknown }> = [];
+    extractor.flushRemainingToolCalls(
+      bridge.wrapProgress({
+        report: (part) => {
+          const tool = part as { callId: string; name: string; input: unknown };
+          reported.push(tool);
+        },
+      }),
+    );
+
+    assert.equal(reported.length, 1);
+    assert.equal(reported[0]?.callId, "call_muse");
+    assert.equal(reported[0]?.name, "read_file");
+    assert.deepEqual(reported[0]?.input, { filePath: "/x.ts" });
   });
 
   it("text stream emits text for flat and nested output_text.delta shapes", () => {

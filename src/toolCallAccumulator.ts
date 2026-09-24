@@ -80,11 +80,14 @@ export class ToolCallAccumulator {
 
       const fn = toolCall.function;
       if (isRecord(fn)) {
+        // Responses `*.done` events are normalized with `replacePending` so
+        // their authoritative complete value does not duplicate prior deltas.
+        const replacePending = toolCall.replacePending === true;
         if (typeof fn.name === "string") {
-          pending.name += fn.name;
+          pending.name = replacePending ? fn.name : pending.name + fn.name;
         }
         if (typeof fn.arguments === "string") {
-          pending.arguments += fn.arguments;
+          pending.arguments = replacePending ? fn.arguments : pending.arguments + fn.arguments;
         }
       }
 

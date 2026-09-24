@@ -299,7 +299,7 @@ flowchart TD
 
 Single engine, four adapters. Handles: HTTP 400 recoverable retry (`analyzeHttp400ForRetry`), transient 5xx backoff, request/idle timeouts, cancellation, usage summary + context-window report + usage DataParts. **No gzip** (OpenCode proxy returns 500 on `Content-Encoding: gzip`).
 
-Extractors: `OpenAiResponseExtractor` (chat-completions + normalized Responses/Google) and `AnthropicResponseExtractor` (Messages SSE event types), sharing `BaseResponseExtractor` (reasoning accounting + think-tag filter + loop suppression).
+Extractors: `OpenAiResponseExtractor` (chat-completions + normalized Responses/Google) and `AnthropicResponseExtractor` (Messages SSE event types), sharing `BaseResponseExtractor` (reasoning accounting + think-tag filter + loop suppression). Responses `*.done` tool events replace pending call fields with their authoritative snapshots, covering Muse 1.3 done-only arguments without duplicating streamed deltas.
 
 ### 5.5 Vision Proxy (`provider/visionProxy.ts`)
 
@@ -361,7 +361,7 @@ Reuse these before writing new logic (all under `src/` root unless noted):
 | `apiKeyResolution.ts`    | `resolveResponseApiKey` cold-start fallback                                                                                                                             | provider             |
 | `providerEnablement.ts`  | `providerEnabledSetting()` — reads root config (never section-scoped)                                                                                                   | extension + commands |
 | `reasoningHistory.ts`    | `thinkingTextFromValue`, `shouldEchoThinkingHistory` (family-gated echo)                                                                                                | messages             |
-| `toolCallAccumulator.ts` | `ToolCallAccumulator` (flush only on `tool_calls` finish reason)                                                                                                        | extractors           |
+| `toolCallAccumulator.ts` | `ToolCallAccumulator` (flush only on `tool_calls` finish reason; authoritative replacement snapshots supported)                                                         | extractors           |
 | `contextWindowHook*.ts`  | context-window usage injection — **monkey-patches** Copilot's internal `$handleProgressChunk` + `Set.prototype`; bridge = lazy-load seam; silent no-op if capture fails | engine/provider      |
 | `visionProxyCache.ts`    | SHA-256 image-hash → vision-proxy description cache (FIFO, cap 200)                                                                                                     | provider             |
 | `runtimeDiagnostics.ts`  | `runtimeDiagnosticsLines()` — version/host/platform/integrity lines for the Diagnostics command                                                                         | provider             |

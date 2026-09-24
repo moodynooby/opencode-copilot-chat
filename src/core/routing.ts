@@ -78,24 +78,7 @@ export function normalizeResponsesStreamEvent(data: unknown): unknown {
   if (eventType === "response.output_item.added") {
     const item = data.item;
     if (isRecord(item) && item.type === "function_call" && typeof item.name === "string") {
-      return {
-        choices: [
-          {
-            index: 0,
-            delta: {
-              tool_calls: [
-                {
-                  index: typeof data.output_index === "number" ? data.output_index : 0,
-                  id: firstString(item.call_id, item.id) ?? "",
-                  type: "function",
-                  function: { name: item.name, arguments: "" },
-                },
-              ],
-            },
-            finish_reason: null,
-          },
-        ],
-      };
+      return normalizeResponsesToolCallDelta(data, item, false);
     }
   }
 
@@ -119,6 +102,13 @@ export function normalizeResponsesStreamEvent(data: unknown): unknown {
           ],
         }
       : { choices: [] };
+  }
+
+  // Done events carry the authoritative complete arguments. Treat them as a
+  // replacement rather than another delta: Muse 1.3 can omit argument deltas,
+  // while other gateways send both deltas and the same complete value.
+  if (eventType === "response.function_call_arguments.done") {
+    return normalizeResponsesToolCallDelta(data, { arguments: data.arguments }, true);
   }
 
   if (eventType.includes("reasoning")) {
@@ -146,6 +136,9 @@ export function normalizeResponsesStreamEvent(data: unknown): unknown {
 
   if (eventType === "response.output_item.done") {
     const item = data.item;
+    if (isRecord(item) && item.type === "function_call" && typeof item.name === "string") {
+      return normalizeResponsesToolCallDelta(data, item, true);
+    }
     if (isRecord(item) && item.type === "message" && Array.isArray(item.content)) {
       let text = "";
       for (const part of item.content) {
@@ -339,6 +332,45 @@ export function normalizeGoogleFullResponse(data: unknown): unknown {
     ],
     ...(usage ? { usage } : {}),
   };
+}
+
+function normalizeResponsesToolCallDelta(data: Record<string, unknown>, item: Record<string, unknown>, replacePending: boolean): unknown {
+  const args = normalizeResponsesToolArguments(item.arguments);
+  if (replacePending && args === undefined) {
+    return { choices: [] };
+  }
+
+  const id = firstString(item.call_id, item.id);
+  const name = typeof item.name === "string" ? item.name : undefined;
+  return {
+    choices: [
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index: typeof data.output_index === "number" ? data.output_index : 0,
+              ...(id ? { id } : {}),
+              type: "function",
+              function: {
+                ...(name === undefined ? {} : { name }),
+                arguments: args ?? "",
+              },
+              ...(replacePending ? { replacePending: true } : {}),
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ],
+  };
+}
+
+function normalizeResponsesToolArguments(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  return isRecord(value) ? JSON.stringify(value) : undefined;
 }
 
 function normalizeResponsesFinishReason(value: string | undefined): "stop" | "tool_calls" | "length" | "content_filter" | null {

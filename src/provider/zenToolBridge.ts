@@ -249,7 +249,9 @@ export function createZenToolBridge(tools: readonly vscode.LanguageModelChatTool
           if (part instanceof vscode.LanguageModelToolCallPart) {
             const mapped = this.mapToolCall(part.name, part.input);
             if (!mapped) {
-              throw new Error(`OpenCode Zen tool bridge cannot safely translate ${part.name}; the real VS Code tool was not invoked.`);
+              throw new Error(
+                `OpenCode Zen tool bridge cannot safely translate ${part.name}; the model call did not match a selected VS Code tool and its input schema.`,
+              );
             }
             progress.report(new vscode.LanguageModelToolCallPart(part.callId, mapped.name, mapped.input));
             return;

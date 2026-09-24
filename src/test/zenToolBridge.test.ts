@@ -103,6 +103,20 @@ describe("Zen tool bridge", () => {
     assert.equal(messages[0]?.tool_calls?.[0]?.function.name, "read");
   });
 
+  it("fails closed when a model call does not match the selected tool schema", () => {
+    const bridge = createZenToolBridge([readFile, runInTerminal]);
+    assert.ok(bridge);
+    const wrapped = bridge.wrapProgress({
+      report: () => {
+        // The malformed call must fail before reaching progress.
+      },
+    });
+    const vscode = (Module as unknown as { _load: (request: string, parent: unknown) => typeof import("vscode") })._load("vscode", module);
+    assert.throws(() => {
+      wrapped.report(new vscode.LanguageModelToolCallPart("call-3", "read", {}));
+    }, /did not match a selected VS Code tool and its input schema/);
+  });
+
   it("returns mapped calls to VS Code while preserving call IDs", () => {
     const bridge = createZenToolBridge([readFile, runInTerminal]);
     assert.ok(bridge);

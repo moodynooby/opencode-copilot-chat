@@ -1,6 +1,18 @@
 # 🧠 OPENCODE COPILOT CHAT DEVLOG
 
-**Branch:** `chore/models-dev-data-sync` (work on `main`) | **Updated:** 2026-09-23 Asia/Jakarta | **Current Phase:** issue #226 fix — global `opencodego.thinking.*` now wins over the picker schema-default echo; verified end-to-end, pending commit.
+**Branch:** `feat/moodynooby-opencode-v2-zen` | **Updated:** 2026-09-24 Asia/Jakarta | **Current Phase:** Muse 1.3 Zen tool-bridge fix — Responses done events now preserve authoritative tool arguments.
+
+---
+
+## ✅ Muse 1.3 Zen Tool-Call Fix — 2026-09-24
+
+**Symptom:** anonymous Muse 1.3 requests intermittently ended with `OpenCode Zen tool bridge cannot safely translate read` from the Responses end-of-stream tool-call flush.
+
+**Root cause:** `response.output_item.added` supplied the `read` name, but Muse could omit `response.function_call_arguments.delta` and provide the complete arguments only in `response.output_item.done`. The normalizer discarded that completed function-call item, so the bridge received `{}` instead of `{ path }` and correctly failed closed. Gateways that send both deltas and done snapshots also needed replacement semantics to avoid concatenating the same arguments twice.
+
+**Fix:** normalize Responses function-call done events as authoritative replacement snapshots in `core/routing.ts`; `ToolCallAccumulator` now applies the replacement marker without weakening the Zen bridge's tool/input validation.
+
+**Verification:** the new end-to-end regression reproduced the exact pre-fix bridge exception, then passed with the real `read_file` tool binding. The full unit suite passed 511/511. The full lint runner passed EditorConfig, ESLint, Shell, TypeScript, and all unit tests; repository-wide Markdown/Prettier remains blocked only by pre-existing formatting errors in `AGENTS.md`.
 
 ---
 
