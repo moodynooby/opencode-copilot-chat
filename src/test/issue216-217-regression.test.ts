@@ -219,7 +219,7 @@ describe("Responses tool/text event shapes extract into parts", () => {
           status: "completed",
           name: "read",
           call_id: "call_muse",
-          arguments: '{"path":"/x.ts"}',
+          arguments: '{"filePath":"/x.ts"}',
         },
       },
       { type: "response.completed", response: { id: "resp_muse", status: "completed" } },
@@ -229,18 +229,21 @@ describe("Responses tool/text event shapes extract into parts", () => {
     }
 
     const { createZenToolBridge } = await import("../provider/zenToolBridge.js");
-    const bridge = createZenToolBridge([
-      {
-        name: "read_file",
-        description: "Read a workspace file.",
-        inputSchema: { type: "object", properties: { filePath: { type: "string" } }, required: ["filePath"] },
-      },
-      {
-        name: "run_in_terminal",
-        description: "Run a terminal command.",
-        inputSchema: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
-      },
-    ]);
+    const bridge = createZenToolBridge(
+      [
+        {
+          name: "read_file",
+          description: "Read a workspace file.",
+          inputSchema: { type: "object", properties: { filePath: { type: "string" } }, required: ["filePath"] },
+        },
+        {
+          name: "run_in_terminal",
+          description: "Run a terminal command.",
+          inputSchema: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+        },
+      ],
+      "legacy",
+    );
     assert.ok(bridge);
     const reported: Array<{ callId: string; name: string; input: unknown }> = [];
     extractor.flushRemainingToolCalls(

@@ -82,7 +82,7 @@ describe("OpenCode Zen provider definitions", () => {
     assert.equal(isSupportedZenModel("test-novita-dsf4.1"), false);
   });
 
-  it("uses the bridge-gated free-model policy in legacy mode", () => {
+  it("uses the bridge-gated free-model policy per transport", () => {
     assert.equal(isAnonymousZenModel("big-pickle", "legacy"), true);
     assert.equal(isAnonymousZenModel("big-pickle", "v2"), false);
     assert.equal(isAnonymousZenModel("space-bunny-free", "legacy"), true);
@@ -91,6 +91,6 @@ describe("OpenCode Zen provider definitions", () => {
     assert.equal(isAnonymousZenModel("gpt-5.5", "legacy"), false);
     assert.equal(requiresZenToolBridge("big-pickle", "legacy"), true);
     assert.equal(requiresZenToolBridge("space-bunny-free", "legacy"), false);
-    assert.equal(requiresZenToolBridge("big-pickle", "v2"), false);
+    assert.equal(requiresZenToolBridge("big-pickle", "v2"), true);
   });
 });
