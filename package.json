@@ -529,6 +529,7 @@
     "test": "npm run compile && tsx scripts/run-unit-tests.ts",
     "watch": "npm run clean && tsc -watch -p ./",
     "validate-models": "tsx scripts/validate-models.ts",
+    "probe-zen-tools": "tsx scripts/probe-zen-tools.ts",
     "test-retry": "tsx scripts/test-retry-e2e.ts",
     "prepackage": "npm test",
     "package": "vsce package",
