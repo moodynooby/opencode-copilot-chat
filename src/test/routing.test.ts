@@ -107,6 +107,31 @@ describe("normalizeResponsesStreamEvent — output_text.done and output_item.don
   });
 });
 
+describe("normalizeResponsesStreamEvent — tool argument preservation", () => {
+  before(async () => {
+    const routing = await import("../core/routing.js");
+    normalizeResponsesStreamEvent = routing.normalizeResponsesStreamEvent;
+  });
+
+  it("preserves whitespace in function-call argument fragments", () => {
+    const fragment = '{"path":"/tmp/a file.ts",';
+    const result = normalizeResponsesStreamEvent({
+      type: "response.function_call_arguments.delta",
+      delta: fragment,
+    }) as { choices: { delta: { tool_calls: { function: { arguments: string } }[] } }[] };
+    assert.equal(result.choices[0]?.delta.tool_calls[0]?.function.arguments, fragment);
+  });
+
+  it("does not let an empty function-call completion erase streamed arguments", () => {
+    const result = normalizeResponsesStreamEvent({
+      type: "response.output_item.done",
+      output_index: 0,
+      item: { type: "function_call", name: "read", arguments: "" },
+    }) as { choices: unknown[] };
+    assert.deepEqual(result.choices, []);
+  });
+});
+
 describe("normalizeResponsesStreamEvent — output_text.delta whitespace preservation (#192)", () => {
   before(async () => {
     const routing = await import("../core/routing.js");

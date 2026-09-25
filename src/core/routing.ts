@@ -83,7 +83,9 @@ export function normalizeResponsesStreamEvent(data: unknown): unknown {
   }
 
   if (eventType === "response.function_call_arguments.delta") {
-    const delta = firstString(data.delta, data.arguments_delta);
+    // Argument fragments are arbitrary JSON slices and may split inside a
+    // string value. Never trim an individual fragment (#244).
+    const delta = firstStringRaw(data.delta, data.arguments_delta);
     return delta
       ? {
           choices: [
@@ -336,7 +338,10 @@ export function normalizeGoogleFullResponse(data: unknown): unknown {
 
 function normalizeResponsesToolCallDelta(data: Record<string, unknown>, item: Record<string, unknown>, replacePending: boolean): unknown {
   const args = normalizeResponsesToolArguments(item.arguments);
-  if (replacePending && args === undefined) {
+  // Some gateways emit an empty function_call completion alongside the real
+  // argument deltas. Treat only a non-empty snapshot as authoritative; an
+  // empty replacement would erase a valid streamed JSON object.
+  if (replacePending && (args === undefined || !args.trim())) {
     return { choices: [] };
   }
 
@@ -515,9 +520,9 @@ function firstString(...values: unknown[]): string | undefined {
 
 /**
  * Like `firstString` but WITHOUT trimming — preserves leading/trailing
- * whitespace in the value. Used for text content deltas where trimming
- * per-chunk destroys spaces between words (Responses API streams text
- * in small fragments; see issue #192).
+ * whitespace in the value. Used for streamed text and JSON argument fragments
+ * where trimming per-chunk destroys spaces or valid JSON (Responses API
+ * streams both in small fragments; see issues #192 and #244).
  */
 function firstStringRaw(...values: unknown[]): string | undefined {
   for (const value of values) {
