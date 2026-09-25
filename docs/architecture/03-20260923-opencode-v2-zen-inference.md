@@ -43,7 +43,7 @@ A configured service-account key is sent as `Authorization: Bearer <key>`. With 
 Authorization: Bearer public
 ```
 
-The gateway-facing tool policy is handled by one request-scoped compatibility bridge. The selected transport chooses the pinned OpenCode profile; the bridge replaces only the selected read and terminal descriptors, then maps model calls back to the original VS Code tool names so VS Code remains the executor and permission system. The bridge never executes a tool, creates a substitute executor, or silently falls back between profiles.
+The gateway-facing tool policy is handled by one request-scoped compatibility bridge. The selected transport chooses the pinned OpenCode profile; the bridge maps compatible read and terminal capabilities when VS Code supplies them, then maps model calls back to the original VS Code tool names so VS Code remains the executor and permission system. A restricted subagent request may therefore use a pass-through-only bridge. The bridge never executes a tool, creates a substitute executor, or silently falls back between profiles.
 
 | Transport                               | OpenCode profile | Model-facing contract                                                                                                            |
 | --------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,13 +52,15 @@ The gateway-facing tool policy is handled by one request-scoped compatibility br
 
 The real Copilot variants are the only host differences translated by the bridge: `filePath`/`path`, `offset`/`limit` versus `startLine`/`endLine`, `workdir`/`cwd`, and `mode`/`background`/`isBackground`. Read defaults come from OpenCode (offset `1`, limit `2000`); foreground is the shell default and is always written explicitly rather than left to a host default that could be async. A v1 `background` request is rejected because v1 has no such capability, so v1 always resolves to the host's synchronous mode. Unsupported or ambiguous bindings fail closed, as does a background request against a host that cannot express one. Assistant history is rewritten atomically: a call's name and arguments move to the same profile together; if any selected call cannot be represented, the request is rejected before dispatch rather than sending mixed history.
 
+The pinned OpenCode `read` description also mentions directories, images, and PDFs, while VS Code's current `read_file` implementation is text-focused and directs image reads to `view_image`. The bridge does not synthesize directory/image/PDF executors. Those capabilities remain separate selected passthrough tools; a read request outside the bound host schema is rejected by VS Code. Making the pinned description capability-aware requires a separate upstream-contract decision.
+
 #### Host approval metadata
 
 VS Code's `run_in_terminal` requires `command`, `explanation`, `goal`, and `mode`, and marks `isBackground` as a deprecated alias of `mode`. The bridge models all three spellings of execution mode, resolves them to a single intent, and treats a recorded call carrying both `mode` and a contradicting legacy flag as ambiguous.
 
 `explanation` and `goal` are host-only approval text with no execution semantics. Rather than fabricate intent, the bridge derives them deterministically from the first non-empty line of the exact command it is about to forward, so the text the user approves always matches what runs. Only fields the host actually requires are emitted, and a command with no non-empty line is never forwarded.
 
-All other selected VS Code tools pass through unchanged. This includes `runSubagent`, search/explore subagents, edit, plan, MCP, and future tools, so subagent execution and permission behavior remain owned by VS Code. The bridge does not rename `runSubagent` to OpenCode's separate `task` executor. Requests that need the bridge but lack compatible real read/terminal tools fail before network dispatch. The v2 anonymous catalog still uses its narrow verified seed allowlist; authenticated non-seed free models use the v2 profile and therefore require compatible tools.
+All other selected VS Code tools pass through unchanged. This includes `runSubagent`, search/explore subagents, edit, plan, MCP, and future tools, so subagent execution and permission behavior remain owned by VS Code. The bridge does not rename `runSubagent` to OpenCode's separate `task` executor. Missing read/terminal capabilities are not synthesized: a restricted subagent request with only other selected tools uses a pass-through-only bridge, while no-tool requests and ambiguous or unrepresentable recognized bindings fail before network dispatch. Successful results then cross the shared provider serializer: prompt-tsx trees are flattened, text/JSON data is decoded, and unknown structured values are preserved as JSON before the next request. The v2 anonymous catalog still uses its narrow verified seed allowlist; authenticated non-seed free models use the v2 profile and map whichever compatible capabilities are supplied.
 
 ### Experimental V2 Console transport
 
@@ -92,7 +94,7 @@ The gateway version is deliberately separate from the extension package version.
 1. Unsupported catalog-entry filtering (`jev-*`, `test`, and `test-novita-dsf4.1`).
 2. Availability/deprecation filtering.
 3. `freeOnly` filtering.
-4. Credential-aware filtering: legacy anonymous callers see supported free conversational models; the request-scoped bridge gates non-seed models on real read/terminal tools. V2 anonymous callers retain the verified keyless seed set; authenticated non-seed free models use the same bridge with the v2 profile, while authenticated callers may also see paid models.
+4. Credential-aware filtering: legacy anonymous callers see supported free conversational models; the request-scoped bridge maps compatible read/terminal capabilities when supplied and preserves restricted subagent tool sets. V2 anonymous callers retain the verified keyless seed set; authenticated non-seed free models use the same capability-aware bridge with the v2 profile, while authenticated callers may also see paid models.
 
 Catalog snapshots are cached by provider, endpoint, transport-specific URL, and a SHA-256 credential scope. This prevents one workspace's model permissions from being reused for another key. The cache prefix is versioned so the transport switch abandons incompatible snapshots.
 
@@ -115,4 +117,4 @@ Responses tool-call `*.done` events are authoritative snapshots, not additional 
 
 ## Verification
 
-The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, OpenCode identity headers, both pinned tool profiles, one-based range translation, history round-trips, fail-closed host mismatches, and subagent/other-tool pass-through. `npm run lint` is the required repository gate. A public catalog probe is available, but public free-model Responses requests are rejected by the upstream free-tier policy before tool-schema validation; an authorized key is still required for a live legacy `bash`/`shell` A/B and for authenticated V2 validation. Unavailable catalog entries remain filtered.
+The implementation is covered by unit tests for default and V2 URL derivation, provider-aware auth, anonymous filtering, credential-scoped catalog caching, OpenCode identity headers, both pinned tool profiles, one-based range translation, history round-trips, fail-closed host mismatches, restricted subagent subsets, other-tool pass-through, and rich tool-result serialization. `npm run lint` is the required repository gate. A public catalog probe is available, but public free-model Responses requests are rejected by the upstream free-tier policy before tool-schema validation; an authorized key is still required for a live legacy `bash`/`shell` A/B and for authenticated V2 validation. Unavailable catalog entries remain filtered.

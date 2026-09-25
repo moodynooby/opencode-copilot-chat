@@ -423,6 +423,32 @@ describe("Zen tool bridge", () => {
     );
   });
 
+  it("preserves a restricted subagent tool set when terminal binding is absent", () => {
+    const bridge = createZenToolBridge([readFile, runSubagent, grepSearch], "legacy");
+    assert.ok(bridge);
+
+    assert.deepEqual(
+      bridge.tools.map((tool) => tool.name),
+      ["read", "runSubagent", "grep_search"],
+    );
+    assert.deepEqual(bridge.mapToolCall("read", { filePath: "/repo/a.ts", offset: 3, limit: 4 }), {
+      name: "read_file",
+      input: { filePath: "/repo/a.ts", startLine: 3, endLine: 6 },
+    });
+    assert.deepEqual(bridge.mapToolCall("runSubagent", { description: "Inspect", prompt: "Read the project" }), {
+      name: "runSubagent",
+      input: { description: "Inspect", prompt: "Read the project" },
+    });
+    assert.equal(bridge.mapToolCall("bash", { command: "git status" }), undefined);
+
+    const subagentOnly = createZenToolBridge([runSubagent, grepSearch], "legacy");
+    assert.ok(subagentOnly);
+    assert.deepEqual(
+      subagentOnly.tools.map((tool) => tool.name),
+      ["runSubagent", "grep_search"],
+    );
+  });
+
   it("rewrites only selected history and remains idempotent", () => {
     const bridge = createZenToolBridge([readFile, runInTerminal, runSubagent], "legacy");
     assert.ok(bridge);
@@ -557,10 +583,35 @@ describe("Zen tool bridge", () => {
     );
   });
 
-  it("fails closed for missing, ambiguous, or unrepresentable bindings", () => {
-    assert.equal(createZenToolBridge([readFile], "legacy"), undefined);
-    assert.equal(createZenToolBridge([runInTerminal], "legacy"), undefined);
-    assert.equal(createZenToolBridge([readFile, { ...readFile, name: "read_file_copy" }], "legacy"), undefined);
+  it("permits capability subsets but fails closed for ambiguous or unrepresentable bindings", () => {
+    const readOnly = createZenToolBridge([readFile], "legacy");
+    assert.ok(readOnly);
+    assert.deepEqual(
+      readOnly.tools.map((tool) => tool.name),
+      ["read"],
+    );
+    const shellOnly = createZenToolBridge([runInTerminal], "legacy");
+    assert.ok(shellOnly);
+    assert.deepEqual(
+      shellOnly.tools.map((tool) => tool.name),
+      ["bash"],
+    );
+    assert.deepEqual(shellOnly.mapToolCall("bash", { command: "git status" }), {
+      name: "run_in_terminal",
+      input: { command: "git status" },
+    });
+    const shellOnlyV2 = createZenToolBridge([runInTerminal], "v2");
+    assert.ok(shellOnlyV2);
+    assert.deepEqual(
+      shellOnlyV2.tools.map((tool) => tool.name),
+      ["shell"],
+    );
+    assert.deepEqual(shellOnlyV2.mapToolCall("shell", { command: "git status" }), {
+      name: "run_in_terminal",
+      input: { command: "git status" },
+    });
+    assert.equal(createZenToolBridge([], "legacy"), undefined);
+    assert.equal(createZenToolBridge([readFile, { ...readFile, name: "vscode_read_file" }], "legacy"), undefined);
 
     const wrongReadType: Tool = {
       ...readFile,

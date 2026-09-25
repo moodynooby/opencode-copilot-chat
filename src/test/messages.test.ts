@@ -1,8 +1,45 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
+import Module from "node:module";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import { historyByteCapForBudget, trimOldMessagesToFitContext } from "../provider/historyTrim.js";
 import { HISTORY_BYTES_PER_TOKEN, HISTORY_TRIM_HEADROOM_MIN_TOKENS, MAX_REQUEST_PAYLOAD_BYTES } from "../config.js";
+import { estimateTokenCount } from "../tokenEstimate.js";
 import type { ApiMessage } from "../request/types.js";
+
+const vscodeMockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vscode-mock-messages-")), "index.js");
+fs.writeFileSync(
+  vscodeMockPath,
+  `"use strict";
+class LanguageModelTextPart { constructor(value) { this.value = value; } }
+class LanguageModelThinkingPart { constructor(value) { this.value = value; } }
+class LanguageModelPromptTsxPart { constructor(value) { this.value = value; } }
+class LanguageModelDataPart { constructor(data, mimeType) { this.data = data; this.mimeType = mimeType; } }
+class LanguageModelToolCallPart { constructor(callId, name, input) { this.callId = callId; this.name = name; this.input = input; } }
+class LanguageModelToolResultPart { constructor(callId, content) { this.callId = callId; this.content = content; } }
+const LanguageModelChatMessageRole = { User: 1, Assistant: 2 };
+module.exports = { LanguageModelTextPart, LanguageModelThinkingPart, LanguageModelPromptTsxPart, LanguageModelDataPart, LanguageModelToolCallPart, LanguageModelToolResultPart, LanguageModelChatMessageRole };
+`,
+  "utf-8",
+);
+
+type ResolveFilename = (request: string, parent: unknown, ...args: unknown[]) => string;
+const moduleResolver = Module as unknown as { _resolveFilename: ResolveFilename };
+const originalResolveFilename = moduleResolver._resolveFilename;
+moduleResolver._resolveFilename = function (request: string, parent: unknown, ...args: unknown[]): string {
+  if (request === "vscode") return vscodeMockPath;
+  return originalResolveFilename.call(this, request, parent, ...args);
+};
+
+let convertMessage: typeof import("../provider/messages.js").convertMessage;
+let partToText: typeof import("../provider/tokens.js").partToText;
+let partToTokenCount: typeof import("../provider/tokens.js").partToTokenCount;
+
+function vscodeModule(): typeof import("vscode") {
+  return (Module as unknown as { _load: (request: string, parent: unknown) => typeof import("vscode") })._load("vscode", module);
+}
 
 function textMessage(role: ApiMessage["role"], text: string): ApiMessage {
   return { role, content: text };
@@ -323,5 +360,70 @@ describe("trimOldMessagesToFitContext — cache-stable headroom", () => {
     const r2 = trimOldMessagesToFitContext(sent2, BUDGET, NO_BYTE_CAP);
     assert.equal(r2.removed, r1.removed, "the cut must not move on a normal follow-up turn");
     assert.deepEqual(sent2.slice(0, sent1.length), sent1, "payload must stay a nested prefix");
+  });
+});
+
+describe("tool-result text serialization", () => {
+  before(async () => {
+    ({ convertMessage } = await import("../provider/messages.js"));
+    ({ partToText, partToTokenCount } = await import("../provider/tokens.js"));
+  });
+
+  it("preserves PromptTsx, textual data, and future structured results for the next model turn", async () => {
+    const vscode = vscodeModule();
+    const promptText = "File: src/a.ts\nconst answer = 42;";
+    const promptPart = new vscode.LanguageModelPromptTsxPart({
+      node: {
+        type: 1,
+        ctor: 2,
+        children: [
+          { type: 1, ctor: 2, children: [{ type: 2, text: "File: src/a.ts", lineBreakBefore: false }] },
+          { type: 1, ctor: 2, children: [{ type: 2, text: "const answer = 42;", lineBreakBefore: false }] },
+        ],
+      },
+    });
+    const imagePart = new vscode.LanguageModelPromptTsxPart({
+      node: { type: 1, ctor: 3, props: { src: "data:image/png;base64,AA==" }, children: [{ type: 2, text: "alt text" }] },
+    });
+    const documentPart = new vscode.LanguageModelPromptTsxPart({
+      node: { type: 1, ctor: 4, props: { data: "ZGF0YQ==", mediaType: "application/pdf" }, children: [] },
+    });
+    const jsonPart = new vscode.LanguageModelDataPart(new TextEncoder().encode('{"ok":true}'), "application/json; charset=utf-8");
+    const futurePart = { kind: "future-tool-result", value: 42 };
+    const resultPart = new vscode.LanguageModelToolResultPart("call-subagent", [promptPart, imagePart, documentPart, jsonPart, futurePart]);
+    const converted = await convertMessage(
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        content: [resultPart],
+      } as never,
+      new Map(),
+      "muse-spark-1.3-contributor-free",
+    );
+
+    assert.deepEqual(converted.messages, [
+      {
+        role: "tool",
+        tool_call_id: "call-subagent",
+        content: [
+          promptText,
+          "[Image embedded in PromptTsx tool result omitted]",
+          "[Document embedded in PromptTsx tool result omitted: application/pdf]",
+          '{"ok":true}',
+          '{"kind":"future-tool-result","value":42}',
+        ].join("\n"),
+      },
+    ]);
+    assert.equal(partToText(promptPart), promptText);
+    assert.equal(partToTokenCount(promptPart), estimateTokenCount(promptText));
+    assert.equal(partToText(imagePart), "[Image embedded in PromptTsx tool result omitted]");
+    assert.doesNotMatch(partToText(imagePart), /alt text/);
+    assert.equal(partToText(documentPart), "[Document embedded in PromptTsx tool result omitted: application/pdf]");
+    assert.equal(partToText(jsonPart), '{"ok":true}');
+    const binaryPart = new vscode.LanguageModelDataPart(new Uint8Array(10_000), "application/octet-stream; charset=binary");
+    const binaryText = partToText(binaryPart);
+    assert.match(binaryText, /Binary tool result omitted/);
+    assert.equal(partToTokenCount(binaryPart), estimateTokenCount(binaryText));
+    assert.equal(partToTokenCount(42), estimateTokenCount("42"));
+    assert.match(partToText(new vscode.LanguageModelPromptTsxPart({})), /Malformed PromptTsx/);
   });
 });

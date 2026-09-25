@@ -59,19 +59,19 @@ export async function convertMessage(
 
     if (part instanceof vscode.LanguageModelToolResultPart) {
       // CONTRACT: A LanguageModelToolResultPart.content is unknown[] and may
-      // contain nested LanguageModelDataPart instances with image MIME types.
-      // This happens when MCP tools (e.g. chrome-devtools-mcp screenshots)
-      // return images. Previously we only ran partToText() which silently
-      // dropped image DataParts (returned "" via the catch-all fallback),
-      // so vision-capable models saw an empty tool result. We now serialize
-      // nested images into OpenAiContentPart image_url parts and emit a
-      // multimodal array on the tool message when any image is present.
+      // contain PromptTsx, text/JSON data, images, or future structured values.
+      // partToText() owns every non-image form; this branch preserves the image
+      // path because images require async normalization and provider-specific
+      // multimodal handling. Nested images arrive from tools such as
+      // chrome-devtools-mcp screenshots and become OpenAiContentPart image_url
+      // entries on the tool message.
       //
       // SIZE GUARD: Images larger than MAX_TOOL_RESULT_IMAGE_BYTES are
       // replaced with a placeholder text part. This prevents a single
       // oversized MCP screenshot from producing multi-MB payloads that
       // trigger upstream 400 errors when the conversation history grows.
-      // Fallback for any non-text, non-image DataPart stays as plain text.
+      // Unsupported non-image binary data is represented explicitly by
+      // partToText() rather than becoming an empty result.
       const toolTextParts: string[] = [];
       const toolImageParts: OpenAiContentPart[] = [];
       for (const resultPart of part.content) {

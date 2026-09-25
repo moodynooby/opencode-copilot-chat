@@ -3,12 +3,12 @@
 # OpenCode Provider Architecture
 
 **Topic:** provider / models / routing / usage / security
-**Updated:** 2026-09-24
+**Updated:** 2026-09-25
 **Tags:** #provider #models #routing #byok #vscode #tool-calling #thinking #usage #security
 **Supersedes:** -
 **Original Session:** 2026-05-14
 **Documented:** 2026-06-12
-**Last verified:** 2026-06-24
+**Last verified:** 2026-09-25
 
 > **Note:** This is a living reference document. All timeline entries below are ✅ Solved and reflect the current codebase. The document is periodically updated as new releases are shipped.
 
@@ -60,7 +60,7 @@ This document is intentionally backdated to the original provider-architecture s
 
 ### 2026-09-24 — OpenCode-compatible Zen transport with experimental V2 path
 
-OpenCode Zen now follows the current OpenCode client by default: live catalog discovery at `/zen/v1/models`, family-scoped OpenAI/Anthropic/Google routes, the official `Bearer public` no-key sentinel, and the official B3/W3C trace headers. The V2 Console transport remains available as a source-only experimental path selected by `ZEN_TRANSPORT_MODE` in `src/config.ts`; there is no automatic fallback. The request-scoped bridge now has two pinned profiles: legacy OpenCode v1.18 uses `read`/`bash`, while v2 uses `read`/`shell`. It replaces only the selected read/terminal descriptors, preserves subagents and every other VS Code-supplied tool, translates unavoidable host field differences, and maps calls back to the original VS Code names. VS Code remains the executor and permissions remain intact. Missing, ambiguous, or unrepresentable bindings fail closed, as does a background request against a host that cannot express one. Host approval text (`explanation`/`goal`) is derived from the exact command being forwarded rather than fabricated. OpenCode Go remains on its existing gateway contract. The fork identifies requests with the official OpenCode app/session/project header shape while retaining its own extension identity (`moodynooby.opencode-copilot-chat`).
+OpenCode Zen now follows the current OpenCode client by default: live catalog discovery at `/zen/v1/models`, family-scoped OpenAI/Anthropic/Google routes, the official `Bearer public` no-key sentinel, and the official B3/W3C trace headers. The V2 Console transport remains available as a source-only experimental path selected by `ZEN_TRANSPORT_MODE` in `src/config.ts`; there is no automatic fallback. The request-scoped bridge now has two pinned profiles: legacy OpenCode v1.18 uses `read`/`bash`, while v2 uses `read`/`shell`. It maps compatible read/terminal capabilities when they are present, preserves subagents and every other VS Code-supplied tool, translates unavoidable host field differences, and maps calls back to the original VS Code names. Restricted subagent tool sets therefore remain executable without a terminal binding; missing tools are not synthesized. Ambiguous or unrepresentable recognized bindings fail closed, as does a background request against a host that cannot express one. Host approval text (`explanation`/`goal`) is derived from the exact command being forwarded rather than fabricated. OpenCode Go remains on its existing gateway contract. The fork identifies requests with the official OpenCode app/session/project header shape while retaining its own extension identity (`moodynooby.opencode-copilot-chat`).
 
 ---
 
@@ -229,7 +229,9 @@ The request layer maps VS Code chat parts and tools into the correct request bod
 
 Tool calling is required for Copilot Agent workflows such as reading files, searching code, editing files, and running terminal commands.
 
-For free Zen models that need the gateway tool policy, `src/provider/zenToolBridge.ts` selects the profile from the active transport and replaces only the selected read/terminal descriptors. Legacy uses OpenCode v1.18's `read`/`bash` contract; experimental v2 uses `read`/`shell`. The bridge translates only unavoidable host differences (`filePath`/`path`, line ranges, working-directory names, and background flags), rewrites history atomically, and rejects the request before dispatch if selected history cannot use the active profile. Subagents, search, edit, MCP, and other selected VS Code tools remain untouched. The bridge never invokes private tools or creates a substitute executor. Requests without compatible real tools fail before network dispatch.
+For free Zen models that need the gateway tool policy, `src/provider/zenToolBridge.ts` selects the profile from the active transport and maps each compatible read/terminal capability that VS Code supplies. Legacy uses OpenCode v1.18's `read`/`bash` contract; experimental v2 uses `read`/`shell`. The bridge translates only unavoidable host differences (`filePath`/`path`, line ranges, working-directory names, and background flags), rewrites history atomically, and rejects the request before dispatch if a recognized binding is ambiguous or unrepresentable. A restricted subagent request with no terminal binding remains pass-through-only; no substitute executor is created. Subagents, search, edit, MCP, and other selected VS Code tools remain untouched.
+
+Tool results cross a separate serialization boundary in `src/provider/tokens.ts`. Text parts pass through directly; prompt-tsx transfer trees are flattened to their rendered text; textual and JSON `LanguageModelDataPart` payloads are decoded; unknown structured results are JSON-serialized; and unsupported binary data becomes an explicit placeholder. `partToTokenCount()` uses the same rendered PromptTsx text, so conversion and budget estimation cannot silently diverge. This is required for current VS Code `read_file` results and for subagent/integration results that use `LanguageModelPromptTsxPart` rather than plain text.
 
 The extension supports:
 

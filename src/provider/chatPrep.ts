@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { ZenToolBridgeError } from "../errors";
 import {
   CONFIG_SECTION,
   DEFAULT_VISION_PROXY_PROMPT,
@@ -127,8 +128,10 @@ export async function prepareChatRequest(
     deps.log(
       `[zen-tool-bridge] unavailable for ${rawModelId}; toolCount=${String(availableToolNames.length)}; available tools: ${availableTools}; schemas: ${summarizeToolSchemas(options.tools)}`,
     );
-    throw new Error(
-      `${deps.definition.displayName} needs the Copilot Agent read-file and terminal tools for this free model.${toolContext} Open Agent Mode and retry; no substitute tool was created.`,
+    const userMessage = `${deps.definition.displayName} needs a usable Copilot Agent tool set for this free model.${toolContext} The selected read-file and terminal tools must be compatible when present; no substitute tool was created.`;
+    throw new ZenToolBridgeError(
+      `[zen-tool-bridge] unavailable for ${rawModelId}; toolCount=${String(availableToolNames.length)}`,
+      userMessage,
     );
   }
   const requestOptions = withZenToolBridgeTools(options, zenToolBridge);

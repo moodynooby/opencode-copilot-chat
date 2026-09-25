@@ -388,8 +388,9 @@ export const TRANSIENT_FETCH_RETRY_JITTER_MS = 250;
  * request-scoped real-tool bridge.
  *
  * Other supported free models are eligible in legacy mode only when the
- * request supplies real Copilot read and terminal tools. The live catalog
- * rotates; never infer bridge support from `-free` alone.
+ * request supplies a usable real Copilot tool set. Compatible read/terminal
+ * capabilities are mapped when present; other selected tools pass through.
+ * The live catalog rotates; never infer bridge support from `-free` alone.
  */
 export const ANONYMOUS_ZEN_MODEL_IDS = new Set(["space-bunny-free"]);
 

@@ -79,8 +79,10 @@ export function isSupportedZenModel(modelId: string): boolean {
  * The official OpenCode-compatible legacy gateway accepts the `public`
  * sentinel. In legacy mode, supported free models are eligible for anonymous
  * discovery; all except the verified seed model use the request-scoped real
- * read/shell tool bridge. The experimental V2 path retains its narrow seed
- * allowlist until its own client policy is verified.
+ * read/shell tool bridge. The bridge maps whichever compatible capabilities
+ * VS Code supplies, while restricted subagent tool sets retain their other
+ * selected tools. The experimental V2 path retains its narrow seed allowlist
+ * until its own client policy is verified.
  */
 export function isAnonymousZenModel(modelId: string, mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
   if (!isFreeModel(modelId) || !isSupportedZenModel(modelId)) return false;
@@ -96,7 +98,10 @@ export function isAnonymousZenModel(modelId: string, mode: ZenTransportMode = ZE
 
 const ZEN_BRIDGE_TRANSPORT_MODES = new Set<ZenTransportMode>(["legacy", "v2"]);
 
-/** Whether a free Zen model needs the request-scoped real-tool bridge in the selected transport. */
+/**
+ * Whether a free Zen model needs the request-scoped real-tool bridge in the selected transport.
+ * A restricted subagent request may use a pass-through-only bridge when it has no read/terminal binding.
+ */
 export function requiresZenToolBridge(modelId: string, mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
   if (!ZEN_BRIDGE_TRANSPORT_MODES.has(mode)) return false;
   return isFreeModel(modelId) && isSupportedZenModel(modelId) && !ANONYMOUS_ZEN_MODEL_IDS.has(modelId);

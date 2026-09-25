@@ -1,9 +1,9 @@
 **Status:** 🟢 Active
 
-# Multimodal Tool Results — Images Returned by MCP Tools
+# Rich Tool Results — Text, Structured Data, and Images
 
 **Topic:** vision / tool-calling / streaming / provider / mcp
-**Updated:** 2026-07-20
+**Updated:** 2026-09-25
 **Tags:** #vision #tool-calling #streaming #provider #mcp
 **Issues:** [#77](https://github.com/ltmoerdani/opencode-copilot-chat/issues/77)
 **Released:** `Unreleased` (post-`0.4.1`)
@@ -12,33 +12,31 @@
 
 ## Overview
 
-Extension-side support for forwarding images that arrive inside a
-`LanguageModelToolResultPart` to vision-capable models. This is the shape
-MCP tools such as `chrome-devtools-mcp` and `playwright-mcp` use to return
-screenshots. Before this feature, those images were silently dropped at
-serialization time and the model received an empty tool result. Now they
-are encoded as OpenAI-style `image_url` content parts and translated into
-the native multimodal format of each supported transport.
+Extension-side support for serializing every supported `LanguageModelToolResultPart` content shape for the next model turn. Current VS Code tools return prompt-tsx transfer trees, textual or JSON data parts, images, and future structured values. MCP tools such as `chrome-devtools-mcp` and `playwright-mcp` use image data parts for screenshots.
+
+Before the original image fix, screenshots were silently dropped and the model received an empty tool result. A later VS Code 1.139 audit found the same loss for successful `read_file` results because they are `LanguageModelPromptTsxPart` values rather than plain text; subagent and other integrations may use the same rich result shapes. The shared serializer now flattens prompt-tsx text, decodes text/JSON data, preserves unknown structured values as JSON, and emits explicit placeholders for unsupported binary data. Images continue through the normalized multimodal path below.
 
 ---
 
 ## Architecture
 
 ```text
-MCP tool returns image
-  (chrome-devtools-mcp screenshot, etc.)
+VS Code tool returns content
+  ├─ LanguageModelTextPart
+  ├─ LanguageModelPromptTsxPart (current read_file / subagent shape)
+  ├─ LanguageModelDataPart (text, JSON, image, or binary)
+  └─ unknown future structured value
   ↓
-VS Code delivers LanguageModelToolResultPart.content = [LanguageModelDataPart]
-  ↓
-convertMessage() walks part.content:
-  • TextPart / internal DataPart / string  → joined into toolTextParts
-  • image DataPart                        → encoded as OpenAiContentPart
-                                            {type:"image_url", image_url:{url:"data:…"}}
+convertMessage() walks LanguageModelToolResultPart.content:
+  • text / prompt-tsx / text+JSON data → rendered text in toolTextParts
+  • unknown structured value           → JSON text
+  • unsupported binary                 → explicit omission placeholder
+  • image DataPart                     → OpenAiContentPart image_url
                                             (subject to MAX_TOOL_RESULT_IMAGE_BYTES = 1 MB)
   ↓
 Tool message content:
-  • string                         if no images present (byte-identical to old behavior)
-  • OpenAiContentPart[] multimodal if ≥1 image present
+  • string                         if no images are present
+  • OpenAiContentPart[] multimodal if ≥1 image is present
   ↓
 Per-transport builder converts to native shape:
   • chat-completions: passes the array through as-is
@@ -92,21 +90,21 @@ results. Ask the tool to produce a smaller screenshot or save it to a file.]`
 
 ## Code Locations
 
-| Concern                                   | Location                                             |
-| ----------------------------------------- | ---------------------------------------------------- |
-| `convertMessage` tool-result image branch | `src/extension.ts` `convertMessage()`                |
-| `MAX_TOOL_RESULT_IMAGE_BYTES` constant    | `src/extension.ts` (near `IMAGE_TOKEN_ESTIMATE`)     |
-| Anthropic tool result content             | `src/extension.ts` `anthropicToolResultContent()`    |
-| Responses API tool output                 | `src/extension.ts` `responsesToolOutput()`           |
-| Google tool response content              | `src/extension.ts` `googleFunctionResponseContent()` |
-| Anthropic content-block type widening     | `src/extension.ts` `AnthropicToolResultBlock`        |
+| Concern                                      | Location                                      |
+| -------------------------------------------- | --------------------------------------------- |
+| VS Code tool-result conversion               | `src/provider/messages.ts` `convertMessage()` |
+| PromptTsx/data/structured text serialization | `src/provider/tokens.ts` `partToText()`       |
+| PromptTsx token estimation                   | `src/provider/tokens.ts` `partToTokenCount()` |
+| `MAX_TOOL_RESULT_IMAGE_BYTES` constant       | `src/config.ts`                               |
+| Anthropic tool result content                | `src/request/anthropic.ts`                    |
+| Responses API tool output                    | `src/responsesRequest.ts`                     |
+| Google tool response content                 | `src/request/google.ts`                       |
 
 ---
 
 ## Verification
 
-- `tsc -p ./` — compile pass, no errors
-- `node --test out/test/**/*.test.js` — 107/107 pass, no regression
+- `npm test` — 525/525 pass, including PromptTsx/text/JSON/unknown tool-result serialization
 - Manual test with `chrome-devtools-mcp` + Kimi K2.7 Code on OpenCode Go:
   model successfully read and described the returned screenshot
 
@@ -118,18 +116,18 @@ manual testing.
 
 ## Limitations
 
-1. **Responses API has no image support in tool output.** Only `gpt-5-codex`
-   is affected today. Images are replaced with an actionable placeholder.
-2. **No history-level image trimming.** The size guard bounds each image
-   individually but does not trim smaller images that collectively exceed
-   the model's context window. VS Code's own trimming is expected to handle
-   that, but our `estimateTokenCount` under-counts base64 payloads.
-3. ~~**Top-level image attachments still have no size cap.**~~ **Resolved.**
-   Top-level images are now normalized via `normalizeImagePart()` (PR #102 /
-   issue #94) and bounded by `MAX_IMAGE_BASE64_BYTES = 5 MB` before send.
-   Tool-result images run through the same normalizer (`src/extension.ts`
-   `convertMessage()` ~L3232) **before** the `MAX_TOOL_RESULT_IMAGE_BYTES`
-   raw guard still applies for cumulative MCP history bounding. See
+1. **Responses API has no image support in tool output.** Images are replaced
+   with an actionable placeholder.
+2. **PromptTsx image/document nodes are represented by placeholders.** The
+   current built-in `read_file` result is a text tree, and subagent integrations
+   may use the same shape. Future rich media nodes are not expanded
+   into provider-specific image/document blocks by this serializer.
+3. **History image trimming is bounded, not unlimited.** The per-image raw-byte
+   guard remains, and older conversation images are replaced beyond
+   `MAX_HISTORY_IMAGES_KEPT = 2`.
+4. **Top-level image size capping is resolved.** Top-level and tool-result
+   images run through the normalizer in `src/provider/messages.ts`; the raw
+   `MAX_TOOL_RESULT_IMAGE_BYTES` guard still applies after normalization. See
    [`docs/features/13-20260803-image-normalization.md`](13-20260803-image-normalization.md).
 
 ---

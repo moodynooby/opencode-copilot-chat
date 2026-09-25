@@ -347,7 +347,8 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
     } = prepared;
 
     if (zenToolBridge) {
-      this.log(`[zen-tool-bridge] mapped pinned OpenCode tools for ${rawModelId}`);
+      const mappedTools = [...zenToolBridge.officialToActual.keys()].join(",") || "passthrough-only";
+      this.log(`[zen-tool-bridge] mapped pinned OpenCode tools (${mappedTools}) for ${rawModelId}`);
     }
     const responseProgress = zenToolBridge?.wrapProgress(progress) ?? progress;
 

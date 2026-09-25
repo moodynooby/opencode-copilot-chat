@@ -1,6 +1,30 @@
 # 🧠 OPENCODE COPILOT CHAT DEVLOG
 
-**Branch:** `feat/moodynooby-opencode-v2-zen` | **Updated:** 2026-09-25 Asia/Jakarta | **Current Phase:** Transport-aware Zen tool contracts — legacy and experimental v2 profiles now mirror OpenCode without a synthetic mixed schema.
+**Branch:** `feat/moodynooby-opencode-v2-zen` | **Updated:** 2026-09-25 Asia/Jakarta | **Current Phase:** Capability-aware Zen tool contracts and lossless rich tool-result serialization for restricted subagent requests.
+
+---
+
+## ✅ Rich Tool Results Reach the Next Model Turn — 2026-09-25
+
+**Symptom:** after the Zen bridge became capability-aware, tools could execute but a successful result could still serialize as an empty `role: "tool"` message. VS Code 1.139's built-in `read_file` returns `LanguageModelPromptTsxPart`; subagent, notebook, browser, and other integrations can also return PromptTsx, text/JSON data parts, or future structured values.
+
+**Root cause:** `partToText()` only recognized text, nested tool calls/results, and strings. It ignored PromptTsx and non-image `LanguageModelDataPart` content, so those results disappeared before the next provider request. The model therefore could not use the successful output even though VS Code executed the tool correctly.
+
+**Fix:** the shared serializer now flattens prompt-tsx's stable transfer tree with its implicit nested-piece line breaks, treats image/document pieces as leaves, decodes parameterized text/JSON data parts, serializes unknown structured values, and emits explicit placeholders for unsupported binary or embedded media. PromptTsx token estimation uses the same rendered representation. The bridge still owns only read/terminal name and argument translation; no generic `task`, `grep`, `glob`, or composite executor was added.
+
+**Verification:** the owner-boundary regression supplies PromptTsx, JSON data, and an unknown future result, then proves `convertMessage()` emits the complete tool message and matching token count. It fails on the pre-fix empty serializer. `npm test` passes 525/525.
+
+---
+
+## ✅ Restricted Subagent Tool Sets — 2026-09-25
+
+**Symptom:** a free-model subagent request supplied `read_file`, search tools, and `runSubagent`, but not `run_in_terminal`; the bridge rejected it before network dispatch.
+
+**Root cause:** `createZenToolBridge()` required both a read and terminal binding before it would preserve any other selected tool. VS Code legitimately gives Explore/search subagents a restricted tool set, so requiring both capabilities coupled subagent execution to the parent Agent Mode tool list.
+
+**Fix:** the bridge now finds read and terminal bindings independently. It maps each compatible capability that is present, preserves all other selected tools, and creates a pass-through-only bridge for restricted subagent sets. It never synthesizes an executor. No-tool requests and ambiguous or unrepresentable recognized bindings still fail closed, now with an actionable `ZenToolBridgeError` instead of a generic preflight error.
+
+**Verification:** added an owner-boundary regression covering a read-only subagent set with `runSubagent`; it failed on the pre-fix implementation and passes after the capability-aware change. `npm test` passes 524/524; existing full-bridge, history, ambiguity, and malformed-call tests remain covered.
 
 ---
 
@@ -32,7 +56,7 @@
 - Experimental `/inference`: `read` uses `path`; `shell` uses `command` with optional `workdir`/`timeout`/`background`.
 - The selected transport, never the model name, chooses the profile. There is no automatic legacy/v2 fallback.
 
-**Bridge invariants:** replace only the selected read/terminal descriptors; preserve subagents, search, edit, MCP, and future VS Code tools; translate only unavoidable host field differences; rewrite history names and arguments atomically and reject the request before dispatch if selected history cannot be represented; reject unrepresentable calls and v1 background requests. Host approval text is derived from the forwarded command, never invented.
+**Bridge invariants:** map only compatible selected read/terminal capabilities; preserve subagents, search, edit, MCP, and future VS Code tools, including restricted subagent sets; translate only unavoidable host field differences; rewrite history names and arguments atomically and reject the request before dispatch if selected history cannot be represented; reject unrepresentable calls and v1 background requests. Host approval text is derived from the forwarded command, never invented.
 
 **Live probe:** added `npm run probe-zen-tools`, an opt-in authorized-key harness for sending the pinned profiles to either transport, forcing read/terminal calls, and optionally A/B-testing the alternate terminal name. It never executes returned tools and supports `--dry-run`.
 

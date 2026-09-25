@@ -2,10 +2,11 @@
  * @fileoverview Safe compatibility bridge between selected Copilot tools and
  * the OpenCode tool contracts required by the Zen gateway.
  *
- * The bridge never executes a tool. It replaces only the selected read and
- * terminal descriptors with the pinned OpenCode wire contract, preserves all
- * other selected tools (including subagents), and maps mapped calls back to the
- * original VS Code tool names so VS Code remains the executor.
+ * The bridge never executes a tool. It replaces a selected read or terminal
+ * descriptor with its pinned OpenCode wire contract when a compatible real
+ * Copilot binding exists, preserves all other selected tools (including
+ * subagents), and maps mapped calls back to the original VS Code tool names so
+ * VS Code remains the executor. Missing capabilities are not synthesized.
  */
 
 import * as vscode from "vscode";
@@ -16,6 +17,7 @@ import { isRecord } from "../utils";
 import { zenToolProfile, type ZenToolName, type ZenToolProfile } from "./zenToolContracts";
 
 const READ_ALIAS_NAMES = new Set(["read", "readfile", "read_file", "vscodereadfile", "copilotreadfile", "fileread", "readworkspacefile"]);
+const ZEN_WIRE_NAMES = new Set<string>(["read", "bash", "shell"]);
 
 const SHELL_ALIAS_NAMES = new Set([
   "shell",
@@ -289,21 +291,28 @@ function bindingIsRepresentable(binding: ToolBinding): boolean {
   });
 }
 
-function findBinding(
+function bindingCandidates(
   tools: readonly vscode.LanguageModelChatTool[],
-  profile: ZenToolProfile,
   capability: BridgeCapability,
-): ToolBinding | undefined {
-  const wireName = (capability === "read" ? profile.read.name : profile.shell.name) as ZenToolName;
+): readonly vscode.LanguageModelChatTool[] {
   const aliases = capability === "read" ? READ_ALIAS_NAMES : SHELL_ALIAS_NAMES;
   const anchorProperties = capability === "read" ? ["filePath", "path"] : ["command"];
-  const candidates = tools.filter((tool) => {
+  return tools.filter((tool) => {
     if (!aliases.has(normalizeToolName(tool.name))) {
       return false;
     }
     const properties = schemaProperties(tool);
     return anchorProperties.some((property) => properties.has(property));
   });
+}
+
+function findBinding(
+  tools: readonly vscode.LanguageModelChatTool[],
+  profile: ZenToolProfile,
+  capability: BridgeCapability,
+): ToolBinding | undefined {
+  const wireName = (capability === "read" ? profile.read.name : profile.shell.name) as ZenToolName;
+  const candidates = bindingCandidates(tools, capability);
 
   // Never guess between multiple real tools. An exact wire-name match is not
   // enough if another plausible tool is also present.
@@ -677,10 +686,11 @@ function parseToolArguments(value: unknown): Record<string, unknown> | undefined
 /**
  * Create a bridge for the selected OpenCode contract.
  *
- * The selected read and terminal tools are replaced by their pinned wire
- * descriptors. Every other selected tool is retained unchanged, so subagents,
- * search, edit, MCP, and future VS Code tools continue through the normal
- * request/response path.
+ * A compatible read or terminal tool is replaced by its pinned wire descriptor
+ * when present. Missing capabilities are not synthesized: restricted subagent
+ * requests retain their other selected tools unchanged. Ambiguous or
+ * unrepresentable recognized bindings still fail closed, and a request with no
+ * tools returns undefined so the caller can apply its normal preflight policy.
  */
 export function createZenToolBridge(
   tools: readonly vscode.LanguageModelChatTool[] | undefined,
@@ -691,27 +701,33 @@ export function createZenToolBridge(
   }
 
   const profile = zenToolProfile(mode);
+  const readCandidates = bindingCandidates(tools, "read");
+  const shellCandidates = bindingCandidates(tools, "shell");
   const read = findBinding(tools, profile, "read");
   const shell = findBinding(tools, profile, "shell");
-  if (!read || !shell || read.actual.name === shell.actual.name) {
+  if (
+    (readCandidates.length > 0 && !read) ||
+    (shellCandidates.length > 0 && !shell) ||
+    (read && shell && read.actual.name === shell.actual.name)
+  ) {
     return undefined;
   }
 
-  const selectedActualNames = new Set([read.actual.name, shell.actual.name]);
-  const wireNames = new Set<string>([read.wireName, shell.wireName]);
+  const bindings = [read, shell].filter((binding): binding is ToolBinding => binding !== undefined);
+  const selectedActualNames = new Set(bindings.map((binding) => binding.actual.name));
+  const wireNames = new Set<string>(bindings.map((binding) => binding.wireName));
   if (tools.some((tool) => !selectedActualNames.has(tool.name) && wireNames.has(tool.name))) {
     return undefined;
   }
 
-  const bindings = [read, shell];
   const officialToActual = new Map<string, string>(bindings.map((binding) => [binding.wireName, binding.actual.name]));
   const actualToOfficial = new Map<string, string>(bindings.map((binding) => [binding.actual.name, binding.wireName]));
   const passthroughNames = new Set(tools.filter((tool) => !selectedActualNames.has(tool.name)).map((tool) => tool.name));
   const bindingByWireName = new Map<string, ToolBinding>(bindings.map((binding) => [binding.wireName, binding]));
   const bindingByActualName = new Map<string, ToolBinding>(bindings.map((binding) => [binding.actual.name, binding]));
   const wireTools = tools.map((tool) => {
-    if (tool.name === read.actual.name) return profile.read;
-    if (tool.name === shell.actual.name) return profile.shell;
+    if (read && tool.name === read.actual.name) return profile.read;
+    if (shell && tool.name === shell.actual.name) return profile.shell;
     return tool;
   });
 
@@ -725,9 +741,6 @@ export function createZenToolBridge(
         name: string;
         arguments: string;
       }> = [];
-      const knownWireNames = new Set<string>(["read", "bash", "shell"]);
-      const isMappedToolName = (name: string): boolean => knownWireNames.has(name);
-
       for (const message of messages) {
         for (const call of message.tool_calls ?? []) {
           const binding = bindingByActualName.get(call.function.name);
@@ -739,14 +752,16 @@ export function createZenToolBridge(
             continue;
           }
 
-          // Calls already carrying the active wire name are normalized again so
+          // Calls already carrying an active wire name are normalized again so
           // repeated preparation is idempotent and never creates a new mixed
-          // name/schema pair. A call from the other profile is rejected rather
-          // than silently treated as a transport fallback.
+          // name/schema pair. A full bridge still rejects an unavailable profile
+          // name; a restricted bridge leaves it untouched so a subagent can
+          // carry the parent's context safely.
           const wireBinding = bindingByWireName.get(call.function.name);
           if (!wireBinding) {
-            if (passthroughNames.has(call.function.name)) continue;
-            if (isMappedToolName(call.function.name)) throw historyBridgeError(call.function.name, undefined);
+            if (bindings.length === 2 && ZEN_WIRE_NAMES.has(call.function.name) && !passthroughNames.has(call.function.name)) {
+              throw historyBridgeError(call.function.name, undefined);
+            }
             continue;
           }
           const input = parseToolArguments(call.function.arguments);
