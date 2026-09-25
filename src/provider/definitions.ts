@@ -94,9 +94,12 @@ export function isAnonymousZenModel(modelId: string, mode: ZenTransportMode = ZE
   return ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
 }
 
-/** Whether a free Zen model needs the request-scoped real-tool bridge. */
+const ZEN_BRIDGE_TRANSPORT_MODES = new Set<ZenTransportMode>(["legacy", "v2"]);
+
+/** Whether a free Zen model needs the request-scoped real-tool bridge in the selected transport. */
 export function requiresZenToolBridge(modelId: string, mode: ZenTransportMode = ZEN_TRANSPORT_MODE): boolean {
-  return mode === "legacy" && isFreeModel(modelId) && isSupportedZenModel(modelId) && !ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
+  if (!ZEN_BRIDGE_TRANSPORT_MODES.has(mode)) return false;
+  return isFreeModel(modelId) && isSupportedZenModel(modelId) && !ANONYMOUS_ZEN_MODEL_IDS.has(modelId);
 }
 
 function zenModelAllowed(modelId: string, apiKey: string | undefined, mode: ZenTransportMode): boolean {

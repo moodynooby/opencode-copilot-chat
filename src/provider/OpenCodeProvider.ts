@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { OpenCodeRequestError } from "../errors";
+import { OpenCodeRequestError, ZenToolBridgeError } from "../errors";
 import {
   hasExplicitModelLimits,
   normalizeLiveModelMetadata,
@@ -18,8 +18,7 @@ import { streamResponsesApi as runStreamResponsesApi } from "../transports/respo
 
 import { GO_VENDOR, resolveBaseVendor, type ProviderVendor } from "../providerTypes";
 
-import { ModelListEntry, OpenCodeModel, ProviderDefinition, requiresZenToolBridge } from "./definitions";
-import { createZenToolBridge, withZenToolBridgeTools } from "./zenToolBridge";
+import { ModelListEntry, OpenCodeModel, ProviderDefinition } from "./definitions";
 import {
   buildAnthropicMessagesRequestBody,
   buildChatCompletionsRequestBody,
@@ -316,7 +315,21 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
     progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
     token: vscode.CancellationToken,
   ): Promise<void> {
-    const prepared = await prepareChatRequest(this.chatPrepDeps(), model, messages, options, token);
+    const reportError = (error: unknown): void => {
+      const message = getErrorMessage(error);
+      this.log(`ERROR model=${model.id}: ${message}`);
+      if (error instanceof OpenCodeRequestError || error instanceof ZenToolBridgeError) {
+        vscode.window.showErrorMessage(error.userMessage);
+      }
+    };
+
+    let prepared: Awaited<ReturnType<typeof prepareChatRequest>>;
+    try {
+      prepared = await prepareChatRequest(this.chatPrepDeps(), model, messages, options, token);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
     const {
       apiKey,
       rawModelId,
@@ -328,17 +341,14 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
       limits,
 
       requestHeaders,
+      requestOptions,
+      zenToolBridge,
       onTransportSummary,
     } = prepared;
 
-    const zenToolBridge = requiresZenToolBridge(rawModelId, this.definition.zenTransportMode)
-      ? createZenToolBridge(options.tools)
-      : undefined;
     if (zenToolBridge) {
-      zenToolBridge.rewriteApiMessages(apiMessages);
-      this.log(`[zen-tool-bridge] mapped real Copilot read/shell tools for ${rawModelId}`);
+      this.log(`[zen-tool-bridge] mapped pinned OpenCode tools for ${rawModelId}`);
     }
-    const requestOptions = withZenToolBridgeTools(options, zenToolBridge);
     const responseProgress = zenToolBridge?.wrapProgress(progress) ?? progress;
 
     // ISSUE #220: one shared channel for the provider's lifetime — the
@@ -350,7 +360,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
       // Subagent/tool-call requests always have tools present. Force
       // think-tag stripping for these requests to prevent <think> tags
       // in content from rendering as blank code blocks in the chat UI.
-      const isToolCallRequest = Array.isArray(options.tools) && options.tools.length > 0;
+      const isToolCallRequest = Array.isArray(requestOptions.tools) && requestOptions.tools.length > 0;
       const forceStripThinkTags = isToolCallRequest || undefined;
 
       if (routing.endpointKind === "messages") {
@@ -397,7 +407,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
           onTransportSummary,
           stripThinkTags: settings.stripThinkTags,
           forceStripThinkTags,
-          toolNameMap: buildResponsesToolNameMap(options.tools, rawModelId),
+          toolNameMap: buildResponsesToolNameMap(requestOptions.tools, rawModelId),
           onReasoningContent: (toolCallIds, reasoningContent) => {
             this.storeReasoningContent(toolCallIds, reasoningContent);
           },
@@ -460,11 +470,7 @@ export class OpenCodeProvider implements vscode.LanguageModelChatProvider<OpenCo
       });
       this.log(`Request completed: model=${model.id}`);
     } catch (error) {
-      const message = getErrorMessage(error);
-      this.log(`ERROR model=${model.id}: ${message}`);
-      if (error instanceof OpenCodeRequestError) {
-        vscode.window.showErrorMessage(error.userMessage);
-      }
+      reportError(error);
       throw error;
     }
   }

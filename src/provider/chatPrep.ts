@@ -8,13 +8,14 @@ import {
   SETTING_VISION_PROXY_WHOLE_CONVERSATION,
   VISION_PROXY_MODEL_ID_KEY,
   VISION_PROXY_PROMPT_KEY,
+  ZEN_TRANSPORT_MODE,
   secretKeyFor,
 } from "../config";
 import type { ConfiguredLanguageModelResponseOptions } from "./definitions";
 import type { TransportRequestSummary } from "../core/transport";
 import { resolveModelRouting } from "../core/routing";
 import { extractThinkingOverride, resolveThinkingConfig, thinkingProviderFor } from "../thinking";
-import { getErrorMessage } from "../utils";
+import { getErrorMessage, isRecord } from "../utils";
 import type { CachedModelMetadataSnapshot, ResolvedModelMetadata } from "../models/metadata";
 import { resolveResponseApiKey } from "../apiKeyResolution";
 import { convertMessage, normalizeMessages, trimOldImagesFromHistoryInPlace } from "./messages";
@@ -42,7 +43,7 @@ import {
 } from "../usage/dashboard";
 import { GO_VENDOR, type ProviderVendor } from "../providerTypes";
 import { isAnonymousZenModel, requiresZenToolBridge, type OpenCodeModel, type ProviderDefinition } from "./definitions";
-import { createZenToolBridge } from "./zenToolBridge";
+import { createZenToolBridge, withZenToolBridgeTools, type ZenToolBridge } from "./zenToolBridge";
 import type { TransportSummaryLog } from "./transportLog";
 
 /**
@@ -61,6 +62,20 @@ export interface ChatPrepDeps {
   resolveModelMetadata(modelId: string, snapshot: CachedModelMetadataSnapshot): ResolvedModelMetadata;
   reasoningContentByToolCallId: Map<string, string>;
   apiKeysByModelId: Map<string, string>;
+}
+
+function summarizeToolSchemas(tools: readonly vscode.LanguageModelChatTool[] | undefined): string {
+  return (tools ?? [])
+    .map((tool) => {
+      const schema = isRecord(tool.inputSchema) ? tool.inputSchema : undefined;
+      const properties = schema && isRecord(schema.properties) ? Object.keys(schema.properties).sort().join(",") : "none";
+      const required =
+        schema && Array.isArray(schema.required)
+          ? schema.required.filter((value): value is string => typeof value === "string").join(",")
+          : "none";
+      return `${tool.name}{properties=${properties};required=${required}}`;
+    })
+    .join(" ");
 }
 
 export async function prepareChatRequest(
@@ -82,6 +97,8 @@ export async function prepareChatRequest(
   limits: ReturnType<typeof modelLimits>;
   thinkingPayload: unknown;
   requestHeaders: Record<string, string>;
+  requestOptions: vscode.ProvideLanguageModelChatResponseOptions;
+  zenToolBridge: ZenToolBridge | undefined;
   onTransportSummary: (summary: TransportRequestSummary) => void;
 }> {
   const rawModelId = model.rawModelId ?? resolveRawModelId(model.id);
@@ -100,21 +117,21 @@ export async function prepareChatRequest(
       `${deps.definition.displayName} API key is required for this model. Use the ${deps.definition.displayName} gear icon in Language Models to configure it, then reload the window.`,
     );
   }
-  if (
-    deps.baseVendor !== GO_VENDOR &&
-    requiresZenToolBridge(rawModelId, deps.definition.zenTransportMode) &&
-    !createZenToolBridge(options.tools)
-  ) {
-    const availableTools =
-      options.tools
-        ?.map((tool) => tool.name)
-        .sort()
-        .join(", ") || "none";
-    deps.log(`[zen-tool-bridge] unavailable for ${rawModelId}; available tools: ${availableTools}`);
+  const zenTransportMode = deps.definition.zenTransportMode ?? ZEN_TRANSPORT_MODE;
+  const needsZenToolBridge = deps.baseVendor !== GO_VENDOR && requiresZenToolBridge(rawModelId, zenTransportMode);
+  const zenToolBridge = needsZenToolBridge ? createZenToolBridge(options.tools, zenTransportMode) : undefined;
+  if (needsZenToolBridge && !zenToolBridge) {
+    const availableToolNames = (options.tools ?? []).map((tool) => tool.name).sort();
+    const availableTools = availableToolNames.join(", ") || "none";
+    const toolContext = availableToolNames.length > 0 ? ` VS Code supplied tools: ${availableTools}.` : " VS Code supplied no tools.";
+    deps.log(
+      `[zen-tool-bridge] unavailable for ${rawModelId}; toolCount=${String(availableToolNames.length)}; available tools: ${availableTools}; schemas: ${summarizeToolSchemas(options.tools)}`,
+    );
     throw new Error(
-      `${deps.definition.displayName} needs the Copilot Agent read-file and terminal tools for this anonymous free model. Open Agent Mode and retry; no substitute tool was created.`,
+      `${deps.definition.displayName} needs the Copilot Agent read-file and terminal tools for this free model.${toolContext} Open Agent Mode and retry; no substitute tool was created.`,
     );
   }
+  const requestOptions = withZenToolBridgeTools(options, zenToolBridge);
   const convertedMessages = await Promise.all(
     messages.map((message) => convertMessage(message, deps.reasoningContentByToolCallId, rawModelId)),
   );
@@ -238,6 +255,7 @@ export async function prepareChatRequest(
   }
 
   const apiMessages = normalizeMessages(flatMessages);
+  zenToolBridge?.rewriteApiMessages(apiMessages);
 
   // Trim old images from conversation history to bound cumulative payload
   // weight. MCP screenshot loops (chrome-devtools-mcp, playwright-mcp) can
@@ -276,7 +294,7 @@ export async function prepareChatRequest(
   const maxBudget = Math.max(1, effectiveContextWindow - outputReserve - HISTORY_TRIM_SAFETY_MARGIN_TOKENS);
   const inputBudget = Math.min(ratioBudget, maxBudget);
   const historyMaxBytes = historyByteCapForBudget(inputBudget);
-  const historyTrim = trimOldMessagesToFitContext(apiMessages, inputBudget, historyMaxBytes, options.tools);
+  const historyTrim = trimOldMessagesToFitContext(apiMessages, inputBudget, historyMaxBytes, requestOptions.tools);
   if (historyTrim.removed > 0) {
     deps.log(
       `[history-trim] Dropped ${String(historyTrim.removed)} old message(s) to fit context window (budget=${String(inputBudget)} tokens, maxBytes=${String(historyMaxBytes)}); estimated payload now ~${String(historyTrim.finalTokens)} tokens / ${String(historyTrim.finalBytes)} bytes.`,
@@ -307,7 +325,7 @@ export async function prepareChatRequest(
           .slice(0, 3)
           .map((m) => `${m.role}:${JSON.stringify(m.content).slice(0, 2048)}`)
           .join("\n");
-        const toolNames = [...(options.tools ?? [])]
+        const toolNames = [...(requestOptions.tools ?? [])]
           .map((t) => (t as { name: string }).name)
           .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
           .join(",");
@@ -315,7 +333,7 @@ export async function prepareChatRequest(
           .update(prefixAnchor + "|" + toolNames, "utf8")
           .digest("hex")
           .slice(0, 12);
-        deps.log(`[prefix-hash] ${prefixHash} messages=${String(apiMessages.length)} tools=${String(options.tools?.length ?? 0)}`);
+        deps.log(`[prefix-hash] ${prefixHash} messages=${String(apiMessages.length)} tools=${String(requestOptions.tools?.length ?? 0)}`);
       } catch (e) {
         deps.log(`[prefix-hash] failed: ${String(e)}`);
       }
@@ -369,6 +387,8 @@ export async function prepareChatRequest(
     limits,
     thinkingPayload,
     requestHeaders,
+    requestOptions,
+    zenToolBridge,
     onTransportSummary,
   };
 }

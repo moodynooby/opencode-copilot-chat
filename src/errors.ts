@@ -24,6 +24,17 @@ export class OpenCodeRequestError extends Error {
   }
 }
 
+/** A user-actionable compatibility failure raised before a model tool is executed. */
+export class ZenToolBridgeError extends Error {
+  constructor(
+    message: string,
+    readonly userMessage: string,
+  ) {
+    super(message);
+    this.name = "ZenToolBridgeError";
+  }
+}
+
 export function buildOpenCodeRequestError(
   providerDisplayName: string,
   response: Response,
