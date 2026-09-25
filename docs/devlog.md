@@ -1,8 +1,42 @@
 # 🧠 OPENCODE COPILOT CHAT DEVLOG
 
-**Branch:** `feat/moodynooby-opencode-v2-zen` | **Updated:** 2026-09-24 Asia/Jakarta | **Current Phase:** Muse 1.3 Zen tool-bridge fix — Responses done events now preserve authoritative tool arguments.
+**Branch:** `feat/moodynooby-opencode-v2-zen` | **Updated:** 2026-09-25 Asia/Jakarta | **Current Phase:** Transport-aware Zen tool contracts — legacy and experimental v2 profiles now mirror OpenCode without a synthetic mixed schema.
 
 ---
+
+## ✅ Zen Terminal Binding Matches Shipped VS Code — 2026-09-25
+
+**Scope:** fix the free-model preflight that rejected every real Agent Mode request, and add a debuggable extension-host launch path.
+
+**Root cause:** the error was never a missing tool. The dev-host log showed both `read_file` and `run_in_terminal` present in `options.tools`. The bridge failed its representability check because VS Code 1.139's `run_in_terminal` declares `required: ["command", "explanation", "goal", "mode"]`, and `explanation`, `goal`, and `mode` were absent from the shell representable set. Confirmed by running the compiled bridge against the verbatim shipped schema: `bridge created = false`, and `true` once the terminal `required` list was relaxed.
+
+**Fix:** `mode` is now the canonical execution switch, with `background` and the deprecated `isBackground` as fallbacks, resolved to a single intent; the resolved mode is always written explicitly so a host default can never turn a foreground call into an async one. `explanation` and `goal` are approval text with no execution semantics and are derived deterministically from the first non-empty line of the exact command being forwarded, so the text the user approves matches what runs. A recorded call carrying `mode` plus a contradicting legacy flag is ambiguous and rejected.
+
+**Still fail-closed:** v1 background requests, a background request against a sync-only host, and a `workdir` against a host without one (VS Code's real `run_in_terminal` has no `workdir`, so a wrong-directory run is refused rather than silently relocated).
+
+**Debug setup:** added a "Debug Zen Agent (current VS Code profile)" launch config. The pre-existing configs used a clean `--user-data-dir`, which is why built-in Copilot tools were not reproducible there. The preflight error and log now report the actual tool names and schema shape instead of a generic message.
+
+**Tests:** 523 passing. Added coverage using the verbatim shipped `run_in_terminal` schema, mode/legacy mapping, sync-only fail-closed, and history rewriting of calls carrying mode and approval text. One stale test that asserted the old fail-closed behavior was corrected.
+
+**Note:** `npm run lint` reports two pre-existing Markdown/Prettier errors in `AGENTS.md`, unrelated to this change and untouched.
+
+---
+
+## ✅ Transport-Aware Zen Tool Contracts — 2026-09-25
+
+**Scope:** replace the single synthetic `read`/`shell` bridge descriptor with the pinned OpenCode v1.18 and v2 contracts while keeping VS Code as the only tool executor.
+
+**Profiles:**
+
+- Legacy `/zen/v1`: `read` uses `filePath` with 1-based `offset`/`limit`; `bash` uses `command` with optional `workdir`/`timeout` and no background capability.
+- Experimental `/inference`: `read` uses `path`; `shell` uses `command` with optional `workdir`/`timeout`/`background`.
+- The selected transport, never the model name, chooses the profile. There is no automatic legacy/v2 fallback.
+
+**Bridge invariants:** replace only the selected read/terminal descriptors; preserve subagents, search, edit, MCP, and future VS Code tools; translate only unavoidable host field differences; rewrite history names and arguments atomically and reject the request before dispatch if selected history cannot be represented; reject unrepresentable calls and v1 background requests. Host approval text is derived from the forwarded command, never invented.
+
+**Live probe:** added `npm run probe-zen-tools`, an opt-in authorized-key harness for sending the pinned profiles to either transport, forcing read/terminal calls, and optionally A/B-testing the alternate terminal name. It never executes returned tools and supports `--dry-run`.
+
+**Verification:** `npm run compile` passed; `npm test` passed 519/519. ESLint, TypeScript, shellcheck, and editorconfig pass. A public `/zen/v1/models` probe succeeded, but the public Responses probe was stopped by the upstream free-tier policy before tool-schema validation, so the `bash`/`shell` A/B still requires an authorized Console key. Repository-wide Markdown/Prettier remains blocked only by pre-existing `AGENTS.md` formatting violations.
 
 ## ✅ Muse 1.3 Zen Tool-Call Fix — 2026-09-24
 
@@ -13,6 +47,16 @@
 **Fix:** normalize Responses function-call done events as authoritative replacement snapshots in `core/routing.ts`; `ToolCallAccumulator` now applies the replacement marker without weakening the Zen bridge's tool/input validation.
 
 **Verification:** the new end-to-end regression reproduced the exact pre-fix bridge exception, then passed with the real `read_file` tool binding. The full unit suite passed 511/511. The full lint runner passed EditorConfig, ESLint, Shell, TypeScript, and all unit tests; repository-wide Markdown/Prettier remains blocked only by pre-existing formatting errors in `AGENTS.md`.
+
+## ✅ Zen Tool-Bridge History Schema Follow-up — 2026-09-24
+
+**Symptom:** the Responses tool-bridge fix still produced `cannot safely translate read` on later Muse turns, even though the real `read_file` tool was selected.
+
+**Root cause:** `rewriteApiMessages()` changed prior VS Code tool-call names (`read_file` → `read`) without changing their arguments (`filePath`/`startLine`/`endLine`). The gateway then received a mixed alias name and schema, and the model could copy that shape into a new `read` call. Separately, trimming each Responses argument fragment could corrupt valid JSON, and an empty completion snapshot could erase already-streamed arguments.
+
+**Fix:** history rewrites now translate name and input together, use the canonical `path`/`offset`/`limit` and `command`/`background` shapes, preserve supported terminal review metadata such as `explanation`, `goal`, and `mode`, and leave an unsafe call's original name and arguments together. Required real-tool fields that have no alias representation also fail closed instead of being silently dropped. Responses argument deltas preserve whitespace, and empty done snapshots no longer replace streamed arguments. Regression tests cover history round-trips, the actual Responses wire payload, terminal fields, whitespace fragments, and empty completions.
+
+**Verification:** `npm test` passes 519/519. The full lint runner passes EditorConfig, ESLint, Shell, TypeScript, and tests; only pre-existing `AGENTS.md` Markdown/Prettier violations remain.
 
 ---
 

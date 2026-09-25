@@ -42,7 +42,7 @@
 | 🎯 **Smart routing**             | Each model family auto-routes to its native transport (`/responses`, `/messages`, `streamGenerateContent`, `/chat/completions`)                                                                                                                       |
 | 🖼️ **Vision + PDF + Audio**      | Multimodal models pass through image, PDF, audio, and video inputs. Oversized images auto-resize to 2000×2000 / 5MB to match the gateway contract.                                                                                                    |
 | 📐 **Context-size picker**       | Kimi K3 and other tiered-context models expose `256K` vs full-window selection in the per-model configuration, with the cheaper tier selected by default.                                                                                             |
-| 🔒 **Your key, your control**    | Anonymous legacy Zen free models use no key; optional Console and Go keys are stored by VS Code and never leave your machine. The bridge uses only real Copilot read/terminal tools.                                                                  |
+| 🔒 **Your key, your control**    | Anonymous legacy Zen free models use no key; optional Console and Go keys are stored by VS Code and never leave your machine. The bridge uses only real Copilot read/terminal tools and preserves other VS Code tools, including subagents.           |
 
 ---
 
@@ -61,7 +61,7 @@
 1. **Install or update [VS Code](https://code.visualstudio.com/)** to version 1.125 or newer. OpenCode BYOK chat works without a GitHub sign-in or Copilot plan.
 2. **Install this extension** from the VS Code Marketplace (or press `F5` in this repo for dev mode).
 3. **Choose access:**
-   - **Free Zen models:** No API key is required in the default legacy transport. The extension discovers the current catalog dynamically; non-seed free models use a compatibility bridge only when Agent Mode supplies real file-read and terminal tools.
+   - **Free Zen models:** No API key is required in the default legacy transport. The extension discovers the current catalog dynamically; free models that need the tool policy use a request-scoped compatibility bridge when Agent Mode supplies real file-read and terminal tools. The experimental v2 transport uses its own OpenCode v2 `read`/`shell` contract.
    - **Paid Zen models (optional):** Create a service-account key in the [OpenCode Console](https://opencode.ai/console). Add credits to use Claude, GPT, Gemini, and other paid models.
    - **OpenCode Go (optional):** Subscribe to **OpenCode Go** ($10/mo, $5 first month promo) for curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro.
 4. **Open Copilot Chat** (Cmd/Ctrl+Shift+I, or click the Copilot icon).
@@ -131,9 +131,9 @@ Curated open coding models, refreshed live from the endpoint. Deprecated/legacy 
 
 ### 🆓 OpenCode Zen free models (live catalog)
 
-OpenCode Zen exposes a rotating set of free conversational models through the official OpenCode-compatible gateway. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. In the default legacy transport, verified free models use a request-scoped compatibility bridge only when Agent Mode supplies real file-read and terminal tools; no substitute tool is executed by the extension. The bridge preserves VS Code tool execution and permissions. Models that are unavailable upstream or catalog-only System One entries remain filtered.
+OpenCode Zen exposes a rotating set of free conversational models through the official OpenCode-compatible gateway. The extension fetches that catalog dynamically, so the picker follows additions and removals without a hardcoded model release. The default legacy transport uses the pinned OpenCode v1.18 `read`/`bash` contract through a request-scoped bridge; the experimental v2 transport uses the pinned OpenCode v2 `read`/`shell` contract. The bridge translates only unavoidable host field differences, preserves VS Code tool execution and permissions, and leaves subagents and other selected tools unchanged. Models that are unavailable upstream or catalog-only System One entries remain filtered.
 
-> Free models can change without notice and may have stricter anonymous rate limits. The bridge currently requires Copilot Agent Mode's real read-file and terminal tools; use a Console service-account key for paid models or any free model your active client cannot tool-call.
+> Free models can change without notice and may have stricter anonymous rate limits. The bridge requires compatible Copilot Agent Mode read-file and terminal tools; it never creates a substitute executor. Use a Console service-account key for paid models or any free model your active client cannot tool-call.
 
 The default transport follows the current OpenCode client and uses the official `/zen/v1` gateway with its public-mode sentinel. The V2 Console transport is retained as an experimental, source-only path: change `ZEN_TRANSPORT_MODE` in `src/config.ts` from `"legacy"` to `"v2"` to test it. There is no automatic fallback between transports.
 
@@ -455,7 +455,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Is it really free? What's the catch?</b></summary>
 
-**OpenCode Zen** offers a dynamic set of rotating free conversational models. In the default legacy transport, supported free models can run anonymously when Agent Mode supplies the real read-file and terminal tools required by the gateway compatibility bridge. The extension does not execute substitute tools. Paid Zen models still require a Console service-account key and credits. Anonymous access can be rate-limited and the upstream free-tier policy may change.
+**OpenCode Zen** offers a dynamic set of rotating free conversational models. In the default legacy transport, supported free models can run anonymously when Agent Mode supplies compatible real read-file and terminal tools. The experimental v2 transport uses the same VS Code executor with its OpenCode v2 tool profile. The extension does not execute substitute tools. Paid Zen models still require a Console service-account key and credits. Anonymous access can be rate-limited and the upstream free-tier policy may change.
 
 **OpenCode Go** is a **subscription**: **$10/mo** ($5 first month promo) with generous usage limits (5h/$12, weekly/$30, monthly/$60). It unlocks curated open models like DeepSeek V4 Pro, Kimi K3, GLM-5.3, Qwen3.8 Max, MiMo V2.5 Pro. When you hit the limit, you can continue using the free Zen models.
 
@@ -466,7 +466,7 @@ Inline suggestions, next-edit suggestions, semantic search, and embedding-backed
 <details>
 <summary><b>Does Agent Mode / tool-calling work?</b></summary>
 
-**Yes, fully.** The extension forwards VS Code tool schemas in the correct format for each endpoint (OpenAI `tool_calls` or Anthropic `tool_use`). Copilot Agent can read files, search, edit, and run terminal commands through any OpenCode model.
+**Yes, fully.** The extension forwards VS Code tool schemas in the correct format for each endpoint (OpenAI `tool_calls` or Anthropic `tool_use`). The Zen bridge translates only the read/terminal contract required by the selected OpenCode transport; Copilot Agent can read files, search, edit, run terminal commands, and invoke subagents through any OpenCode model.
 
 </details>
 
@@ -576,6 +576,18 @@ npm run compile  # build TypeScript
 npm run watch    # watch mode
 npm run package  # build .vsix
 ```
+
+### Live Zen tool-contract probe
+
+The opt-in probe sends the pinned v1 or v2 read/terminal descriptors to a real gateway and verifies the returned tool call without executing it:
+
+```bash
+OPENCODE_ZEN_API_KEY=... npm run probe-zen-tools -- --mode legacy --model MODEL --yes
+OPENCODE_ZEN_API_KEY=... npm run probe-zen-tools -- --mode v2 --model MODEL --yes
+OPENCODE_ZEN_API_KEY=... npm run probe-zen-tools -- --mode legacy --model MODEL --compare --yes
+```
+
+Use `--tool read`, `--tool terminal`, or `--tool all` to limit the probes. `--endpoint chat` tests Chat Completions instead of Responses. V2 requires a real Console key; legacy may use the public anonymous sentinel. Multi-request runs require `--yes`. Use `--dry-run` to inspect the redacted request plan without sending anything.
 
 Press `F5` in VS Code to launch an **Extension Development Host**.
 
