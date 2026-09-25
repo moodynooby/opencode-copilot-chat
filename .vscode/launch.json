@@ -2,10 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Extension with Copilot",
+      "name": "Run Extension with Copilot (isolated profile)",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--user-data-dir=${workspaceFolder}/.vscode-test/copilot-user-data"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
+      "name": "Debug Zen Agent (current VS Code profile)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--verbose", "--disable-workspace-trust"],
+      "env": {
+        "OPENCODE_CONTEXT_CACHE_DEBUG": "1"
+      },
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile"
     },
