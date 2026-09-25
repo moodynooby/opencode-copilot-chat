@@ -2,7 +2,7 @@
   "name": "opencode-copilot-chat",
   "displayName": "OpenCode for Copilot Chat: Zen + Go",
   "description": "Use OpenCode Zen and Go models in GitHub Copilot Chat with live model discovery, native tool calling, optional anonymous Zen access, and Console BYOK.",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "publisher": "moodynooby",
   "author": {
     "name": "MoodyNooby"
